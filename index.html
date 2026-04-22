@@ -1,0 +1,2267 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SAVE Secure Application Portal</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Sora:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #07111f;
+      --bg2: #0b1830;
+      --panel: rgba(8, 18, 35, 0.86);
+      --panel-strong: rgba(7, 14, 28, 0.94);
+      --panel-soft: rgba(18, 33, 60, 0.58);
+      --line: rgba(131, 185, 255, 0.16);
+      --line-strong: rgba(131, 185, 255, 0.3);
+      --text: #ebf3ff;
+      --muted: #93a7c4;
+      --dim: #6d819f;
+      --accent: #67d3ff;
+      --accent-strong: #48a8ff;
+      --gold: #f1c878;
+      --good: #5fe3a7;
+      --warn: #ffca6b;
+      --danger: #ff7188;
+      --shadow: 0 28px 80px rgba(0, 0, 0, 0.32);
+      --radius: 24px;
+      --radius-sm: 16px;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html, body {
+      margin: 0;
+      min-height: 100%;
+      background:
+        radial-gradient(circle at top left, rgba(72, 168, 255, 0.2), transparent 24%),
+        radial-gradient(circle at top right, rgba(241, 200, 120, 0.14), transparent 28%),
+        linear-gradient(180deg, #040a15 0%, var(--bg) 38%, #050d1b 100%);
+      color: var(--text);
+      font-family: "Sora", sans-serif;
+    }
+
+    body {
+      min-height: 100vh;
+      padding: 28px 20px 40px;
+    }
+
+    body.exam-live {
+      overflow: hidden;
+    }
+
+    body.exam-live #question-list,
+    body.exam-live #question-list * {
+      user-select: none;
+    }
+
+    .shell {
+      max-width: 1400px;
+      margin: 0 auto;
+      position: relative;
+      z-index: 1;
+    }
+
+    .masthead {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 20px;
+      margin-bottom: 20px;
+      padding: 18px 22px;
+      border: 1px solid var(--line);
+      background: rgba(5, 12, 26, 0.82);
+      border-radius: 26px;
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(18px);
+    }
+
+    .brand {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .brand-kicker,
+    .eyebrow,
+    .stat-label,
+    .pill,
+    .panel-kicker,
+    .detail-label {
+      font-family: "IBM Plex Mono", monospace;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      font-size: 11px;
+    }
+
+    .brand-kicker {
+      color: var(--gold);
+    }
+
+    .brand-title {
+      margin: 0;
+      font-size: clamp(26px, 4vw, 42px);
+      line-height: 1;
+    }
+
+    .brand-sub {
+      margin: 0;
+      color: var(--muted);
+      max-width: 720px;
+      line-height: 1.7;
+      font-size: 14px;
+    }
+
+    .tab-row {
+      display: inline-flex;
+      gap: 10px;
+      padding: 6px;
+      border-radius: 999px;
+      background: rgba(12, 24, 46, 0.92);
+      border: 1px solid var(--line);
+    }
+
+    .tab-btn {
+      border: 0;
+      cursor: pointer;
+      padding: 12px 16px;
+      border-radius: 999px;
+      background: transparent;
+      color: var(--muted);
+      font-family: inherit;
+      font-weight: 700;
+      transition: 160ms ease;
+    }
+
+    .tab-btn:hover,
+    .tab-btn:focus-visible {
+      color: var(--text);
+      background: rgba(103, 211, 255, 0.08);
+      outline: none;
+    }
+
+    .tab-btn.active {
+      color: #06101d;
+      background: linear-gradient(135deg, var(--gold), #ffe3a8);
+      box-shadow: 0 12px 30px rgba(241, 200, 120, 0.25);
+    }
+
+    .view {
+      display: none;
+      gap: 20px;
+    }
+
+    .view.active {
+      display: grid;
+    }
+
+    .hero-grid {
+      display: grid;
+      grid-template-columns: 1.2fr 0.95fr;
+      gap: 20px;
+    }
+
+    .panel {
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--panel);
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(18px);
+      overflow: hidden;
+    }
+
+    .panel-body {
+      padding: 26px;
+    }
+
+    .panel-kicker {
+      color: var(--accent);
+      margin-bottom: 14px;
+    }
+
+    .panel h2,
+    .panel h3 {
+      margin: 0 0 10px;
+      line-height: 1.1;
+    }
+
+    .panel p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.8;
+    }
+
+    .hero-headline {
+      font-size: clamp(32px, 5vw, 58px);
+      margin-bottom: 14px;
+      max-width: 10ch;
+    }
+
+    .hero-copy {
+      max-width: 64ch;
+      margin-bottom: 22px;
+    }
+
+    .badge-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-bottom: 22px;
+    }
+
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 14px;
+      border: 1px solid rgba(103, 211, 255, 0.2);
+      border-radius: 999px;
+      background: rgba(103, 211, 255, 0.08);
+      color: var(--text);
+      letter-spacing: 0.1em;
+    }
+
+    .pill.warn {
+      border-color: rgba(255, 202, 107, 0.28);
+      background: rgba(255, 202, 107, 0.1);
+      color: #ffe8bb;
+    }
+
+    .pill.danger {
+      border-color: rgba(255, 113, 136, 0.24);
+      background: rgba(255, 113, 136, 0.1);
+      color: #ffd4dc;
+    }
+
+    .security-rail {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 14px;
+      margin-top: 20px;
+    }
+
+    .rail-card {
+      border-radius: var(--radius-sm);
+      border: 1px solid rgba(103, 211, 255, 0.14);
+      background: rgba(14, 28, 51, 0.7);
+      padding: 16px;
+    }
+
+    .rail-card strong {
+      display: block;
+      margin-bottom: 8px;
+      font-size: 15px;
+    }
+
+    .rail-card span {
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.7;
+    }
+
+    .field-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 14px;
+      margin: 18px 0;
+    }
+
+    .field {
+      display: grid;
+      gap: 8px;
+    }
+
+    .field.full {
+      grid-column: 1 / -1;
+    }
+
+    label {
+      color: var(--text);
+      font-weight: 600;
+      font-size: 13px;
+    }
+
+    input,
+    select,
+    button,
+    textarea {
+      font: inherit;
+    }
+
+    input,
+    select,
+    textarea {
+      width: 100%;
+      border: 1px solid rgba(131, 185, 255, 0.2);
+      border-radius: 14px;
+      background: rgba(8, 18, 35, 0.85);
+      color: var(--text);
+      padding: 14px 15px;
+      outline: none;
+      transition: border-color 150ms ease, box-shadow 150ms ease, transform 150ms ease;
+    }
+
+    input::placeholder,
+    textarea::placeholder {
+      color: var(--dim);
+    }
+
+    input:focus,
+    select:focus,
+    textarea:focus {
+      border-color: rgba(103, 211, 255, 0.42);
+      box-shadow: 0 0 0 4px rgba(103, 211, 255, 0.08);
+      transform: translateY(-1px);
+    }
+
+    .consent-row {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      margin-bottom: 18px;
+      padding: 14px;
+      border-radius: 16px;
+      border: 1px solid rgba(255, 202, 107, 0.18);
+      background: rgba(255, 202, 107, 0.08);
+    }
+
+    .consent-row input {
+      width: 18px;
+      height: 18px;
+      margin-top: 2px;
+      flex: 0 0 auto;
+    }
+
+    .consent-row span {
+      color: #ffeccc;
+      line-height: 1.8;
+      font-size: 13px;
+    }
+
+    .actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      margin-top: 20px;
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      min-height: 52px;
+      padding: 0 18px;
+      border: 0;
+      border-radius: 16px;
+      cursor: pointer;
+      font-weight: 700;
+      transition: transform 150ms ease, box-shadow 150ms ease, opacity 150ms ease;
+    }
+
+    .btn:hover,
+    .btn:focus-visible {
+      transform: translateY(-1px);
+      outline: none;
+    }
+
+    .btn.primary {
+      color: #06101d;
+      background: linear-gradient(135deg, var(--gold), #f8e0a9);
+      box-shadow: 0 18px 38px rgba(241, 200, 120, 0.2);
+    }
+
+    .btn.secondary {
+      color: var(--text);
+      background: linear-gradient(135deg, rgba(72, 168, 255, 0.18), rgba(103, 211, 255, 0.1));
+      border: 1px solid rgba(103, 211, 255, 0.2);
+    }
+
+    .btn.ghost {
+      color: var(--muted);
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid rgba(255, 255, 255, 0.06);
+    }
+
+    .btn.danger {
+      color: #fff3f6;
+      background: linear-gradient(135deg, rgba(255, 113, 136, 0.85), rgba(192, 44, 76, 0.95));
+    }
+
+    .btn[disabled] {
+      opacity: 0.5;
+      cursor: not-allowed;
+      transform: none;
+      box-shadow: none;
+    }
+
+    .status-box {
+      margin-top: 18px;
+      border-radius: 18px;
+      border: 1px solid rgba(103, 211, 255, 0.18);
+      background: rgba(13, 26, 47, 0.7);
+      padding: 16px 18px;
+      color: var(--muted);
+      line-height: 1.8;
+      font-size: 13px;
+    }
+
+    .status-box.warn {
+      border-color: rgba(255, 202, 107, 0.22);
+      color: #ffe8bb;
+    }
+
+    .status-box.danger {
+      border-color: rgba(255, 113, 136, 0.22);
+      color: #ffd7df;
+    }
+
+    .workspace {
+      display: none;
+    }
+
+    .workspace.live {
+      display: block;
+    }
+
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 14px;
+      margin-bottom: 18px;
+    }
+
+    .stat-card {
+      padding: 18px;
+      border-radius: 18px;
+      border: 1px solid rgba(103, 211, 255, 0.12);
+      background: rgba(8, 17, 33, 0.82);
+    }
+
+    .stat-value {
+      font-size: clamp(28px, 3vw, 40px);
+      font-weight: 800;
+      line-height: 1;
+      margin-top: 8px;
+    }
+
+    .stat-value.good {
+      color: var(--good);
+    }
+
+    .stat-value.warn {
+      color: var(--warn);
+    }
+
+    .stat-value.danger {
+      color: var(--danger);
+    }
+
+    .progress-shell {
+      margin-bottom: 20px;
+      padding: 16px 18px;
+      border-radius: 18px;
+      border: 1px solid rgba(103, 211, 255, 0.14);
+      background: rgba(10, 20, 38, 0.8);
+    }
+
+    .progress-meta {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 12px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .progress-bar {
+      height: 10px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.06);
+      overflow: hidden;
+    }
+
+    .progress-fill {
+      height: 100%;
+      width: 0;
+      border-radius: inherit;
+      background: linear-gradient(90deg, var(--gold), var(--accent));
+      transition: width 180ms ease;
+    }
+
+    .warning-banner {
+      margin-bottom: 18px;
+      padding: 14px 16px;
+      border-radius: 16px;
+      border: 1px solid rgba(255, 202, 107, 0.22);
+      background: rgba(255, 202, 107, 0.1);
+      color: #ffe7b7;
+      display: none;
+    }
+
+    .warning-banner.show {
+      display: block;
+    }
+
+    .warning-banner.danger {
+      border-color: rgba(255, 113, 136, 0.22);
+      background: rgba(255, 113, 136, 0.1);
+      color: #ffd7df;
+    }
+
+    .question-list {
+      display: grid;
+      gap: 16px;
+      max-height: calc(100vh - 290px);
+      overflow: auto;
+      padding-right: 6px;
+    }
+
+    .question-section {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 10px 0 2px;
+      color: var(--gold);
+    }
+
+    .question-section::after {
+      content: "";
+      flex: 1;
+      height: 1px;
+      background: linear-gradient(90deg, rgba(241, 200, 120, 0.3), transparent);
+    }
+
+    .question-card {
+      border-radius: 22px;
+      border: 1px solid rgba(103, 211, 255, 0.12);
+      background: rgba(7, 15, 29, 0.86);
+      padding: 20px;
+    }
+
+    .question-head {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: 14px;
+    }
+
+    .question-number {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 42px;
+      height: 42px;
+      border-radius: 14px;
+      background: rgba(103, 211, 255, 0.12);
+      color: var(--accent);
+      font-weight: 800;
+      flex: 0 0 auto;
+    }
+
+    .question-text {
+      margin: 0;
+      line-height: 1.7;
+      font-size: 15px;
+    }
+
+    .option-grid {
+      display: grid;
+      gap: 12px;
+    }
+
+    .option {
+      position: relative;
+      display: grid;
+      grid-template-columns: auto 1fr;
+      gap: 14px;
+      align-items: flex-start;
+      padding: 14px 16px;
+      border-radius: 16px;
+      border: 1px solid rgba(131, 185, 255, 0.12);
+      background: rgba(13, 25, 47, 0.78);
+      cursor: pointer;
+      transition: border-color 150ms ease, transform 150ms ease, background 150ms ease;
+    }
+
+    .option:hover {
+      transform: translateY(-1px);
+      border-color: rgba(103, 211, 255, 0.28);
+    }
+
+    .option input {
+      position: absolute;
+      opacity: 0;
+      inset: 0;
+      cursor: pointer;
+    }
+
+    .option-key {
+      width: 34px;
+      height: 34px;
+      border-radius: 12px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(255, 255, 255, 0.06);
+      color: var(--gold);
+      font-weight: 800;
+      font-size: 13px;
+    }
+
+    .option-copy {
+      color: var(--text);
+      line-height: 1.7;
+      font-size: 14px;
+    }
+
+    .option.selected {
+      border-color: rgba(103, 211, 255, 0.42);
+      background: linear-gradient(135deg, rgba(72, 168, 255, 0.14), rgba(103, 211, 255, 0.08));
+      box-shadow: 0 0 0 1px rgba(103, 211, 255, 0.12);
+    }
+
+    .option.selected .option-key {
+      background: linear-gradient(135deg, var(--gold), #ffe4a9);
+      color: #07111f;
+    }
+
+    .admin-grid {
+      grid-template-columns: 0.95fr 1.05fr;
+    }
+
+    .summary-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 14px;
+    }
+
+    .table-shell {
+      padding: 22px 22px 18px;
+    }
+
+    .table-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 14px;
+      margin-bottom: 16px;
+    }
+
+    .table-head p {
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.8;
+    }
+
+    .table-wrap {
+      overflow: auto;
+      border-radius: 18px;
+      border: 1px solid rgba(131, 185, 255, 0.12);
+      background: rgba(8, 16, 32, 0.82);
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      min-width: 820px;
+    }
+
+    th,
+    td {
+      padding: 14px 16px;
+      border-bottom: 1px solid rgba(131, 185, 255, 0.08);
+      text-align: left;
+      vertical-align: top;
+      font-size: 13px;
+    }
+
+    th {
+      color: var(--gold);
+      font-family: "IBM Plex Mono", monospace;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      font-size: 11px;
+    }
+
+    td {
+      color: var(--text);
+      line-height: 1.7;
+    }
+
+    tbody tr:hover {
+      background: rgba(103, 211, 255, 0.05);
+    }
+
+    .tag {
+      display: inline-flex;
+      align-items: center;
+      padding: 7px 10px;
+      border-radius: 999px;
+      font-size: 11px;
+      font-family: "IBM Plex Mono", monospace;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      background: rgba(255, 255, 255, 0.05);
+      color: var(--text);
+      white-space: nowrap;
+    }
+
+    .tag.good {
+      background: rgba(95, 227, 167, 0.12);
+      border-color: rgba(95, 227, 167, 0.18);
+      color: #d9ffec;
+    }
+
+    .tag.warn {
+      background: rgba(255, 202, 107, 0.14);
+      border-color: rgba(255, 202, 107, 0.18);
+      color: #ffe9bf;
+    }
+
+    .tag.danger {
+      background: rgba(255, 113, 136, 0.14);
+      border-color: rgba(255, 113, 136, 0.18);
+      color: #ffdce2;
+    }
+
+    .table-btn {
+      border: 1px solid rgba(103, 211, 255, 0.18);
+      background: rgba(103, 211, 255, 0.08);
+      color: var(--text);
+      padding: 10px 12px;
+      border-radius: 12px;
+      cursor: pointer;
+      font-weight: 700;
+    }
+
+    .table-btn:hover {
+      background: rgba(103, 211, 255, 0.14);
+    }
+
+    .detail-panel {
+      display: none;
+      margin-top: 20px;
+    }
+
+    .detail-panel.show {
+      display: block;
+    }
+
+    .detail-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 14px;
+      margin-bottom: 18px;
+    }
+
+    .detail-card {
+      padding: 16px;
+      border-radius: 18px;
+      border: 1px solid rgba(131, 185, 255, 0.12);
+      background: rgba(8, 16, 32, 0.78);
+    }
+
+    .detail-value {
+      margin-top: 8px;
+      font-weight: 700;
+      line-height: 1.6;
+    }
+
+    .answer-review {
+      display: grid;
+      gap: 12px;
+      max-height: 440px;
+      overflow: auto;
+      padding-right: 6px;
+    }
+
+    .answer-card {
+      padding: 16px;
+      border-radius: 18px;
+      border: 1px solid rgba(131, 185, 255, 0.12);
+      background: rgba(8, 16, 32, 0.78);
+    }
+
+    .answer-card h4 {
+      margin: 0 0 8px;
+      font-size: 15px;
+      line-height: 1.6;
+    }
+
+    .answer-card p {
+      margin: 0;
+      color: var(--muted);
+      line-height: 1.8;
+      font-size: 13px;
+    }
+
+    .answer-card .status-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-top: 12px;
+    }
+
+    .muted-note {
+      color: var(--dim);
+      font-size: 12px;
+      line-height: 1.7;
+      margin-top: 14px;
+    }
+
+    .overlay {
+      position: fixed;
+      inset: 0;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      background: rgba(2, 6, 12, 0.82);
+      backdrop-filter: blur(16px);
+      z-index: 90;
+    }
+
+    .overlay.show {
+      display: flex;
+    }
+
+    .overlay-card {
+      width: min(620px, 100%);
+      border-radius: 30px;
+      border: 1px solid rgba(255, 202, 107, 0.22);
+      background: rgba(4, 12, 24, 0.96);
+      box-shadow: 0 32px 100px rgba(0, 0, 0, 0.45);
+      padding: 30px;
+    }
+
+    .overlay-card h2 {
+      margin: 0 0 12px;
+      font-size: clamp(30px, 4vw, 44px);
+      line-height: 1;
+    }
+
+    .overlay-card p {
+      color: var(--muted);
+      line-height: 1.9;
+      margin: 0;
+    }
+
+    .overlay-card.warning {
+      border-color: rgba(255, 202, 107, 0.28);
+    }
+
+    .overlay-card.locked {
+      border-color: rgba(255, 113, 136, 0.32);
+    }
+
+    .empty-state {
+      padding: 20px;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.8;
+      text-align: center;
+    }
+
+    .mono {
+      font-family: "IBM Plex Mono", monospace;
+      word-break: break-word;
+    }
+
+    .sr-only {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      margin: -1px;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      border: 0;
+    }
+
+    @media (max-width: 1120px) {
+      .hero-grid,
+      .admin-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .stats-grid,
+      .summary-grid,
+      .detail-grid,
+      .security-rail {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .question-list {
+        max-height: none;
+      }
+
+      body.exam-live {
+        overflow: auto;
+      }
+    }
+
+    @media (max-width: 760px) {
+      body {
+        padding: 18px 14px 28px;
+      }
+
+      .masthead {
+        flex-direction: column;
+        align-items: flex-start;
+      }
+
+      .field-grid,
+      .stats-grid,
+      .summary-grid,
+      .detail-grid,
+      .security-rail {
+        grid-template-columns: 1fr;
+      }
+
+      .panel-body,
+      .table-shell {
+        padding: 20px;
+      }
+
+      .brand-title {
+        font-size: 32px;
+      }
+
+      .hero-headline {
+        font-size: 34px;
+      }
+
+      .question-head {
+        flex-direction: column;
+      }
+
+      .actions {
+        flex-direction: column;
+      }
+
+      .btn {
+        width: 100%;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <header class="masthead">
+      <div class="brand">
+        <div class="brand-kicker">SAVE Secure Intake Suite</div>
+        <h1 class="brand-title">Application Assessment Portal</h1>
+        <p class="brand-sub">One locked multiple-choice assessment with monitored fullscreen, incident logging, server-side grading, and an admin review panel for submissions and violations.</p>
+      </div>
+      <div class="tab-row" aria-label="Portal Views">
+        <button class="tab-btn active" type="button" data-view-target="assessment-view">Assessment</button>
+        <button class="tab-btn" type="button" data-view-target="admin-view">Admin Panel</button>
+      </div>
+    </header>
+
+    <section class="view active" id="assessment-view">
+      <div class="hero-grid">
+        <article class="panel">
+          <div class="panel-body">
+            <div class="panel-kicker">Candidate Session</div>
+            <h2 class="hero-headline">Locked-in testing with a real incident trail.</h2>
+            <p class="hero-copy">This build is designed around a 45-question application made up of 30 core policy questions and 15 judgment scenarios. Question content loads from Supabase, grading happens server-side, and the browser side only receives the public question bank.</p>
+            <div class="badge-row">
+              <span class="pill">45 Questions</span>
+              <span class="pill">Fullscreen Required</span>
+              <span class="pill warn">1 Focus Warning</span>
+              <span class="pill danger">Copy or Paste = Immediate Lock</span>
+            </div>
+            <div class="security-rail">
+              <div class="rail-card">
+                <strong>Focus Monitoring</strong>
+                <span>Leaving the tab or exiting fullscreen warns once. A second focus violation locks the assessment and records it in the incident log.</span>
+              </div>
+              <div class="rail-card">
+                <strong>Clipboard Blocking</strong>
+                <span>Copy, cut, and paste attempts are blocked during the live session and immediately terminate the assessment.</span>
+              </div>
+              <div class="rail-card">
+                <strong>Admin Review</strong>
+                <span>Supervisors can sign in through Supabase Auth to review submissions, scores, incidents, and answer patterns from one panel.</span>
+              </div>
+            </div>
+            <p class="muted-note">Normal browsers cannot be made perfectly impossible to leave. This page uses the strongest practical browser-side controls available and then locks and logs when users break them.</p>
+          </div>
+        </article>
+
+        <article class="panel">
+          <div class="panel-body">
+            <div class="panel-kicker">Candidate Intake</div>
+            <h2>Start A Secure Session</h2>
+            <p>Enter the applicant details, confirm the security rules, then start the assessment. Once the session is live, the portal monitors fullscreen and focus loss. On the second focus break, the session locks.</p>
+            <div class="field-grid">
+              <div class="field">
+                <label for="candidate-name">Full Name</label>
+                <input id="candidate-name" type="text" maxlength="120" placeholder="Applicant full name">
+              </div>
+              <div class="field">
+                <label for="candidate-discord">Discord</label>
+                <input id="candidate-discord" type="text" maxlength="120" placeholder="user or user#0000">
+              </div>
+              <div class="field">
+                <label for="candidate-roblox">Roblox Username</label>
+                <input id="candidate-roblox" type="text" maxlength="120" placeholder="Roblox username">
+              </div>
+              <div class="field">
+                <label for="candidate-department">Department Or Division</label>
+                <input id="candidate-department" type="text" maxlength="120" placeholder="Example: SAVE Operations">
+              </div>
+            </div>
+            <label class="consent-row" for="candidate-consent">
+              <input id="candidate-consent" type="checkbox">
+              <span>I understand that this session is monitored for tab switching, fullscreen exits, and clipboard use. I also understand that copy, cut, or paste attempts will immediately lock the application.</span>
+            </label>
+            <div class="actions">
+              <button class="btn primary" id="start-assessment-btn" type="button">Enter Assessment</button>
+              <button class="btn secondary" id="reload-fullscreen-btn" type="button">Re-enter Fullscreen</button>
+              <button class="btn ghost" id="clear-draft-btn" type="button">Clear Saved Draft</button>
+            </div>
+            <div class="status-box" id="candidate-status">Waiting for the Supabase question bank. Run the setup SQL before using this page.</div>
+          </div>
+        </article>
+      </div>
+
+      <article class="panel workspace" id="assessment-workspace">
+        <div class="panel-body">
+          <div class="stats-grid">
+            <div class="stat-card">
+              <div class="stat-label">Answered</div>
+              <div class="stat-value" id="answered-count">0 / 0</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-label">Time Left</div>
+              <div class="stat-value" id="time-left">45:00</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-label">Warnings Used</div>
+              <div class="stat-value warn" id="warning-count">0 / 1</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-label">Session State</div>
+              <div class="stat-value good" id="session-state-label">Armed</div>
+            </div>
+          </div>
+
+          <div class="progress-shell">
+            <div class="progress-meta">
+              <span id="progress-copy">Assessment not started.</span>
+              <div class="actions" style="margin:0">
+                <button class="btn secondary" id="submit-assessment-btn" type="button">Submit Assessment</button>
+              </div>
+            </div>
+            <div class="progress-bar" aria-hidden="true">
+              <div class="progress-fill" id="progress-fill"></div>
+            </div>
+          </div>
+
+          <div class="warning-banner" id="live-warning-banner"></div>
+          <div class="question-list" id="question-list" aria-live="polite">
+            <div class="empty-state">The question bank will appear here after the assessment begins.</div>
+          </div>
+        </div>
+      </article>
+    </section>
+
+    <section class="view" id="admin-view">
+      <div class="hero-grid admin-grid">
+        <article class="panel">
+          <div class="panel-body">
+            <div class="panel-kicker">Admin Authentication</div>
+            <h2>Supervisor Review Access</h2>
+            <p>Sign in with a Supabase Auth account that has been added to the <span class="mono">assessment_admins</span> table. Once signed in, this page will show all submissions and all integrity incidents.</p>
+            <div class="field-grid">
+              <div class="field full">
+                <label for="admin-email">Admin Email</label>
+                <input id="admin-email" type="email" placeholder="admin@example.com">
+              </div>
+              <div class="field full">
+                <label for="admin-password">Admin Password</label>
+                <input id="admin-password" type="password" placeholder="Supabase account password">
+              </div>
+            </div>
+            <div class="actions">
+              <button class="btn primary" id="admin-signin-btn" type="button">Sign In</button>
+              <button class="btn secondary" id="admin-refresh-btn" type="button">Refresh Data</button>
+              <button class="btn ghost" id="admin-signout-btn" type="button">Sign Out</button>
+            </div>
+            <div class="status-box" id="admin-status">Not signed in.</div>
+          </div>
+        </article>
+
+        <article class="panel">
+          <div class="panel-body">
+            <div class="panel-kicker">Dashboard Summary</div>
+            <h2>Submission Health</h2>
+            <p>This panel surfaces the main risk signals quickly: completed assessments, locked sessions, average score, and clipboard-triggered terminations.</p>
+            <div class="summary-grid">
+              <div class="stat-card">
+                <div class="stat-label">Submitted</div>
+                <div class="stat-value" id="summary-submitted">0</div>
+              </div>
+              <div class="stat-card">
+                <div class="stat-label">Terminated</div>
+                <div class="stat-value danger" id="summary-terminated">0</div>
+              </div>
+              <div class="stat-card">
+                <div class="stat-label">Average Score</div>
+                <div class="stat-value good" id="summary-average">0%</div>
+              </div>
+              <div class="stat-card">
+                <div class="stat-label">Clipboard Incidents</div>
+                <div class="stat-value warn" id="summary-clipboard">0</div>
+              </div>
+            </div>
+          </div>
+        </article>
+      </div>
+
+      <article class="panel">
+        <div class="table-shell">
+          <div class="table-head">
+            <div>
+              <h3>Submissions</h3>
+              <p>Every finished or locked session that has been written to Supabase. Click view to inspect the answer sheet and the grading breakdown stored with the record.</p>
+            </div>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Applicant</th>
+                  <th>Status</th>
+                  <th>Score</th>
+                  <th>Warnings</th>
+                  <th>Department</th>
+                  <th>Finished</th>
+                  <th>Review</th>
+                </tr>
+              </thead>
+              <tbody id="submission-table-body">
+                <tr><td colspan="7" class="empty-state">Sign in to view submissions.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </article>
+
+      <article class="panel">
+        <div class="table-shell">
+          <div class="table-head">
+            <div>
+              <h3>Incident Log</h3>
+              <p>Clipboard attempts, fullscreen exits, repeated focus loss, and any other flagged behavior that the candidate session reports.</p>
+            </div>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Time</th>
+                  <th>Applicant</th>
+                  <th>Incident</th>
+                  <th>Severity</th>
+                  <th>Session</th>
+                  <th>Details</th>
+                </tr>
+              </thead>
+              <tbody id="incident-table-body">
+                <tr><td colspan="6" class="empty-state">Sign in to view incident logs.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </article>
+
+      <article class="panel detail-panel" id="submission-detail-panel">
+        <div class="panel-body">
+          <div class="table-head">
+            <div>
+              <div class="panel-kicker">Submission Detail</div>
+              <h3 id="detail-title">No submission selected.</h3>
+              <p id="detail-copy">Select a submission from the table above to inspect the answer sheet and integrity summary.</p>
+            </div>
+          </div>
+          <div class="detail-grid" id="detail-summary-grid"></div>
+          <div class="answer-review" id="detail-answer-review"></div>
+        </div>
+      </article>
+    </section>
+  </main>
+
+  <section class="overlay" id="warning-overlay" aria-hidden="true">
+    <div class="overlay-card warning">
+      <div class="panel-kicker">Security Warning</div>
+      <h2>Focus Was Lost</h2>
+      <p id="warning-overlay-copy">Leaving fullscreen or the active tab is not allowed during a live session. This is the only warning. If it happens again, the assessment locks and the incident is recorded.</p>
+      <div class="actions">
+        <button class="btn primary" id="return-to-session-btn" type="button">Return To Session</button>
+      </div>
+    </div>
+  </section>
+
+  <section class="overlay" id="lock-overlay" aria-hidden="true">
+    <div class="overlay-card locked">
+      <div class="panel-kicker">Assessment Lock</div>
+      <h2 id="lock-title">Session Locked</h2>
+      <p id="lock-copy">This assessment is no longer interactive.</p>
+      <div class="actions">
+        <button class="btn secondary" id="lock-close-btn" type="button">Acknowledge</button>
+      </div>
+    </div>
+  </section>
+
+  <script>
+    const APP_CONFIG = {
+      supabaseUrl: 'https://xnqjdgixcocekzehsote.supabase.co',
+      supabaseAnonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhucWpkZ2l4Y29jZWt6ZWhzb3RlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY2NTI4OTIsImV4cCI6MjA5MjIyODg5Mn0.U0zMSMRZE91RYnToZgooIel0VHDyLlxKK-Cr-Oh9ves'
+    };
+
+    const EXAM_DURATION_MINUTES = 45;
+    const MAX_FOCUS_WARNINGS = 1;
+    const EXPECTED_QUESTION_COUNT = 45;
+    const FORM_STORAGE_KEY = 'save_application_candidate_draft_v1';
+
+    const state = {
+      questions: [],
+      questionMap: new Map(),
+      answers: {},
+      incidents: [],
+      applicant: {},
+      sessionId: null,
+      startedAt: null,
+      endsAt: null,
+      warningCount: 0,
+      submitted: false,
+      terminated: false,
+      lockReason: '',
+      lastFocusEventAt: 0,
+      adminSubmissions: [],
+      adminIncidents: [],
+      detailSubmissionId: null
+    };
+
+    let supabaseClient = null;
+    let timerHandle = null;
+
+    const el = {
+      views: document.querySelectorAll('.view'),
+      tabs: document.querySelectorAll('.tab-btn'),
+      candidateStatus: document.getElementById('candidate-status'),
+      candidateName: document.getElementById('candidate-name'),
+      candidateDiscord: document.getElementById('candidate-discord'),
+      candidateRoblox: document.getElementById('candidate-roblox'),
+      candidateDepartment: document.getElementById('candidate-department'),
+      candidateConsent: document.getElementById('candidate-consent'),
+      startAssessmentBtn: document.getElementById('start-assessment-btn'),
+      clearDraftBtn: document.getElementById('clear-draft-btn'),
+      reloadFullscreenBtn: document.getElementById('reload-fullscreen-btn'),
+      assessmentWorkspace: document.getElementById('assessment-workspace'),
+      questionList: document.getElementById('question-list'),
+      answeredCount: document.getElementById('answered-count'),
+      timeLeft: document.getElementById('time-left'),
+      warningCount: document.getElementById('warning-count'),
+      sessionStateLabel: document.getElementById('session-state-label'),
+      progressCopy: document.getElementById('progress-copy'),
+      progressFill: document.getElementById('progress-fill'),
+      submitAssessmentBtn: document.getElementById('submit-assessment-btn'),
+      liveWarningBanner: document.getElementById('live-warning-banner'),
+      warningOverlay: document.getElementById('warning-overlay'),
+      warningOverlayCopy: document.getElementById('warning-overlay-copy'),
+      returnToSessionBtn: document.getElementById('return-to-session-btn'),
+      lockOverlay: document.getElementById('lock-overlay'),
+      lockTitle: document.getElementById('lock-title'),
+      lockCopy: document.getElementById('lock-copy'),
+      lockCloseBtn: document.getElementById('lock-close-btn'),
+      adminEmail: document.getElementById('admin-email'),
+      adminPassword: document.getElementById('admin-password'),
+      adminSigninBtn: document.getElementById('admin-signin-btn'),
+      adminRefreshBtn: document.getElementById('admin-refresh-btn'),
+      adminSignoutBtn: document.getElementById('admin-signout-btn'),
+      adminStatus: document.getElementById('admin-status'),
+      summarySubmitted: document.getElementById('summary-submitted'),
+      summaryTerminated: document.getElementById('summary-terminated'),
+      summaryAverage: document.getElementById('summary-average'),
+      summaryClipboard: document.getElementById('summary-clipboard'),
+      submissionTableBody: document.getElementById('submission-table-body'),
+      incidentTableBody: document.getElementById('incident-table-body'),
+      detailPanel: document.getElementById('submission-detail-panel'),
+      detailTitle: document.getElementById('detail-title'),
+      detailCopy: document.getElementById('detail-copy'),
+      detailSummaryGrid: document.getElementById('detail-summary-grid'),
+      detailAnswerReview: document.getElementById('detail-answer-review')
+    };
+
+    function escapeHtml(value) {
+      return String(value ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
+
+    function safeJson(value, fallback) {
+      try {
+        return JSON.parse(value);
+      } catch {
+        return fallback;
+      }
+    }
+
+    function setCandidateStatus(message, tone = 'default') {
+      el.candidateStatus.textContent = message;
+      el.candidateStatus.className = `status-box${tone === 'warn' ? ' warn' : tone === 'danger' ? ' danger' : ''}`;
+    }
+
+    function setAdminStatus(message, tone = 'default') {
+      el.adminStatus.textContent = message;
+      el.adminStatus.className = `status-box${tone === 'warn' ? ' warn' : tone === 'danger' ? ' danger' : ''}`;
+    }
+
+    function switchView(targetId) {
+      el.views.forEach((view) => view.classList.toggle('active', view.id === targetId));
+      el.tabs.forEach((tab) => tab.classList.toggle('active', tab.dataset.viewTarget === targetId));
+    }
+
+    function formSnapshot() {
+      return {
+        candidateName: el.candidateName.value.trim(),
+        candidateDiscord: el.candidateDiscord.value.trim(),
+        candidateRoblox: el.candidateRoblox.value.trim(),
+        candidateDepartment: el.candidateDepartment.value.trim()
+      };
+    }
+
+    function saveFormDraft() {
+      localStorage.setItem(FORM_STORAGE_KEY, JSON.stringify(formSnapshot()));
+    }
+
+    function restoreFormDraft() {
+      const draft = safeJson(localStorage.getItem(FORM_STORAGE_KEY), null);
+      if (!draft) return;
+      el.candidateName.value = draft.candidateName || '';
+      el.candidateDiscord.value = draft.candidateDiscord || '';
+      el.candidateRoblox.value = draft.candidateRoblox || '';
+      el.candidateDepartment.value = draft.candidateDepartment || '';
+    }
+
+    function clearFormDraft() {
+      localStorage.removeItem(FORM_STORAGE_KEY);
+      el.candidateName.value = '';
+      el.candidateDiscord.value = '';
+      el.candidateRoblox.value = '';
+      el.candidateDepartment.value = '';
+      el.candidateConsent.checked = false;
+      setCandidateStatus('Candidate draft cleared.');
+    }
+
+    function examIsLive() {
+      return Boolean(state.startedAt && !state.submitted && !state.terminated);
+    }
+
+    async function hasSignedInAdmin() {
+      if (!supabaseClient) return false;
+      const { data } = await supabaseClient.auth.getSession();
+      return Boolean(data?.session?.user);
+    }
+
+    function questionCount() {
+      return state.questions.length;
+    }
+
+    function answeredCount() {
+      return Object.keys(state.answers).filter((key) => {
+        const answer = state.answers[key];
+        return typeof answer === 'string' && answer.length === 1;
+      }).length;
+    }
+
+    function humanizeIncident(type) {
+      const map = {
+        window_blur: 'Window blur detected',
+        tab_hidden: 'Tab hidden detected',
+        fullscreen_exit: 'Fullscreen exit detected',
+        navigation_attempt: 'Navigation attempt detected',
+        copy_attempt: 'Copy attempt detected',
+        cut_attempt: 'Cut attempt detected',
+        paste_attempt: 'Paste attempt detected',
+        paste_shortcut_attempt: 'Paste shortcut detected',
+        shift_insert_paste_attempt: 'Shift+Insert paste detected',
+        beforeinput_paste_attempt: 'Paste insertion detected before input',
+        input_paste_attempt: 'Paste insertion detected from input event',
+        drop_paste_attempt: 'Dragged content insertion detected',
+        save_shortcut_blocked: 'Save shortcut blocked',
+        blocked_shortcut: 'Restricted shortcut detected',
+        session_locked: 'Session locked',
+        session_submitted: 'Assessment submitted',
+        session_started: 'Assessment started'
+      };
+      return map[type] || type.replace(/_/g, ' ');
+    }
+
+    function formatDateTime(value) {
+      if (!value) return 'Unknown';
+      const date = new Date(value);
+      if (Number.isNaN(date.getTime())) return String(value);
+      return date.toLocaleString([], {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+    }
+
+    function formatCountdown(ms) {
+      const safe = Math.max(0, Math.floor(ms / 1000));
+      const minutes = Math.floor(safe / 60);
+      const seconds = safe % 60;
+      return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+    }
+
+    function formatPercent(value) {
+      if (value === null || value === undefined || value === '') return 'Pending';
+      const numeric = Number(value);
+      if (!Number.isFinite(numeric)) return String(value);
+      return `${Math.round(numeric * 100) / 100}%`;
+    }
+
+    function buildTag(status) {
+      const normalized = String(status || '').toLowerCase();
+      const tone = normalized === 'submitted'
+        ? 'good'
+        : normalized === 'terminated'
+          ? 'danger'
+          : normalized.includes('clipboard')
+            ? 'warn'
+            : 'warn';
+      return `<span class="tag ${tone}">${escapeHtml(String(status || '').replace(/_/g, ' '))}</span>`;
+    }
+
+    function renderLiveBanner(message = '', tone = 'warn') {
+      if (!message) {
+        el.liveWarningBanner.classList.remove('show');
+        el.liveWarningBanner.textContent = '';
+        return;
+      }
+      el.liveWarningBanner.textContent = message;
+      el.liveWarningBanner.className = `warning-banner show${tone === 'danger' ? ' danger' : ''}`;
+    }
+
+    async function initSupabase() {
+      if (!window.supabase || !APP_CONFIG.supabaseUrl || !APP_CONFIG.supabaseAnonKey) {
+        setCandidateStatus('Supabase is not configured in yes.html yet. Add your URL and anon key first.', 'danger');
+        setAdminStatus('Supabase is not configured in yes.html yet.', 'danger');
+        return;
+      }
+
+      supabaseClient = window.supabase.createClient(APP_CONFIG.supabaseUrl, APP_CONFIG.supabaseAnonKey, {
+        auth: {
+          persistSession: true,
+          autoRefreshToken: true,
+          detectSessionInUrl: true,
+          storageKey: 'save-application-admin-auth'
+        }
+      });
+
+      const { data: sessionData } = await supabaseClient.auth.getSession();
+      if (sessionData?.session?.user?.email) {
+        setAdminStatus(`Signed in as ${sessionData.session.user.email}.`, 'warn');
+      }
+
+      supabaseClient.auth.onAuthStateChange((_event, session) => {
+        if (session?.user?.email) {
+          setAdminStatus(`Signed in as ${session.user.email}.`, 'warn');
+        } else {
+          setAdminStatus('Not signed in.');
+          state.adminSubmissions = [];
+          state.adminIncidents = [];
+          renderAdminSummary();
+          renderSubmissionTable();
+          renderIncidentTable();
+          renderSubmissionDetail();
+        }
+      });
+    }
+
+    async function loadQuestions() {
+      if (!supabaseClient) return;
+
+      setCandidateStatus('Loading question bank from Supabase...');
+      const { data, error } = await supabaseClient
+        .from('assessment_questions')
+        .select('id, section, prompt, option_a, option_b, option_c, option_d, order_index')
+        .eq('active', true)
+        .order('order_index', { ascending: true });
+
+      if (error) {
+        setCandidateStatus(`Could not load assessment_questions: ${error.message}`, 'danger');
+        return;
+      }
+
+      state.questions = (data || []).map((row) => ({
+        id: row.id,
+        section: row.section,
+        prompt: row.prompt,
+        orderIndex: row.order_index,
+        options: [
+          { key: 'A', text: row.option_a },
+          { key: 'B', text: row.option_b },
+          { key: 'C', text: row.option_c },
+          { key: 'D', text: row.option_d }
+        ]
+      }));
+      state.questionMap = new Map(state.questions.map((question) => [question.id, question]));
+
+      renderQuestions();
+      updateExamStats();
+
+      if (!state.questions.length) {
+        setCandidateStatus('No active questions were returned. Seed the question bank in Supabase first.', 'danger');
+        return;
+      }
+
+      const countMessage = state.questions.length === EXPECTED_QUESTION_COUNT
+        ? `Loaded ${state.questions.length} questions. The portal is ready for candidate sessions.`
+        : `Loaded ${state.questions.length} questions. This page expects ${EXPECTED_QUESTION_COUNT} for the default layout.`;
+      setCandidateStatus(countMessage, state.questions.length === EXPECTED_QUESTION_COUNT ? 'default' : 'warn');
+    }
+
+    function renderQuestions() {
+      if (!state.questions.length) {
+        el.questionList.innerHTML = '<div class="empty-state">Questions have not loaded yet.</div>';
+        return;
+      }
+
+      let currentSection = '';
+      const html = [];
+
+      state.questions.forEach((question, index) => {
+        if (question.section !== currentSection) {
+          currentSection = question.section;
+          html.push(`<div class="question-section eyebrow">${escapeHtml(currentSection)}</div>`);
+        }
+
+        const options = question.options.map((option) => {
+          const selected = state.answers[question.id] === option.key;
+          return `
+            <label class="option${selected ? ' selected' : ''}" data-question-id="${escapeHtml(question.id)}" data-option-key="${escapeHtml(option.key)}">
+              <input type="radio" name="question-${escapeHtml(question.id)}" value="${escapeHtml(option.key)}" ${selected ? 'checked' : ''}>
+              <span class="option-key">${escapeHtml(option.key)}</span>
+              <span class="option-copy">${escapeHtml(option.text)}</span>
+            </label>
+          `;
+        }).join('');
+
+        html.push(`
+          <article class="question-card">
+            <div class="question-head">
+              <div class="question-number">${index + 1}</div>
+              <p class="question-text">${escapeHtml(question.prompt)}</p>
+            </div>
+            <div class="option-grid">${options}</div>
+          </article>
+        `);
+      });
+
+      el.questionList.innerHTML = html.join('');
+    }
+
+    function syncSelectedOptions(questionId) {
+      document.querySelectorAll(`[name="question-${questionId}"]`).forEach((input) => {
+        const label = input.closest('.option');
+        if (!label) return;
+        label.classList.toggle('selected', input.checked);
+      });
+    }
+
+    function updateExamStats() {
+      const total = questionCount();
+      const answered = answeredCount();
+
+      el.answeredCount.textContent = `${answered} / ${total}`;
+      el.warningCount.textContent = `${state.warningCount} / ${MAX_FOCUS_WARNINGS}`;
+      el.progressCopy.textContent = total
+        ? `${answered} of ${total} questions answered.`
+        : 'Question bank unavailable.';
+      el.progressFill.style.width = total ? `${Math.min(100, (answered / total) * 100)}%` : '0%';
+
+      const live = examIsLive();
+      if (state.terminated) {
+        el.sessionStateLabel.textContent = 'Locked';
+        el.sessionStateLabel.className = 'stat-value danger';
+      } else if (state.submitted) {
+        el.sessionStateLabel.textContent = 'Submitted';
+        el.sessionStateLabel.className = 'stat-value good';
+      } else if (state.warningCount > 0) {
+        el.sessionStateLabel.textContent = 'Warning';
+        el.sessionStateLabel.className = 'stat-value warn';
+      } else {
+        el.sessionStateLabel.textContent = live ? 'Armed' : 'Standby';
+        el.sessionStateLabel.className = `stat-value${live ? ' good' : ''}`;
+      }
+
+      if (live && state.endsAt) {
+        const remaining = state.endsAt - Date.now();
+        el.timeLeft.textContent = formatCountdown(remaining);
+      } else {
+        el.timeLeft.textContent = `${String(EXAM_DURATION_MINUTES).padStart(2, '0')}:00`;
+      }
+    }
+
+    function collectApplicant() {
+      return {
+        applicant_name: el.candidateName.value.trim(),
+        discord_tag: el.candidateDiscord.value.trim(),
+        roblox_username: el.candidateRoblox.value.trim(),
+        department: el.candidateDepartment.value.trim()
+      };
+    }
+
+    function validateApplicant(applicant) {
+      if (!applicant.applicant_name) return 'Full name is required.';
+      if (!applicant.discord_tag) return 'Discord is required.';
+      if (!applicant.roblox_username) return 'Roblox username is required.';
+      if (!applicant.department) return 'Department or division is required.';
+      if (!el.candidateConsent.checked) return 'The security acknowledgment must be accepted.';
+      if (!state.questions.length) return 'The question bank is not loaded yet.';
+      return '';
+    }
+
+    async function requestExamFullscreen() {
+      try {
+        if (document.fullscreenElement) return true;
+        await document.documentElement.requestFullscreen();
+        return true;
+      } catch (error) {
+        setCandidateStatus(`Fullscreen was blocked: ${error.message}`, 'danger');
+        return false;
+      }
+    }
+
+    function beginTimer() {
+      clearInterval(timerHandle);
+      timerHandle = setInterval(() => {
+        if (!examIsLive()) {
+          clearInterval(timerHandle);
+          return;
+        }
+
+        if (Date.now() >= state.endsAt) {
+          clearInterval(timerHandle);
+          submitAssessment({ timeout: true });
+          return;
+        }
+
+        updateExamStats();
+      }, 1000);
+    }
+
+    async function startAssessment() {
+      if (!supabaseClient) {
+        setCandidateStatus('Supabase is not ready, so the secure assessment cannot start yet.', 'danger');
+        return;
+      }
+
+      if (examIsLive()) {
+        setCandidateStatus('A session is already live in this browser.', 'warn');
+        return;
+      }
+
+      const applicant = collectApplicant();
+      const validationError = validateApplicant(applicant);
+      if (validationError) {
+        setCandidateStatus(validationError, 'danger');
+        return;
+      }
+
+      const fullscreenOk = await requestExamFullscreen();
+      if (!fullscreenOk) return;
+
+      state.applicant = applicant;
+      state.answers = {};
+      state.incidents = [];
+      state.warningCount = 0;
+      state.submitted = false;
+      state.terminated = false;
+      state.lockReason = '';
+      state.sessionId = crypto.randomUUID();
+      state.startedAt = new Date().toISOString();
+      state.endsAt = Date.now() + (EXAM_DURATION_MINUTES * 60 * 1000);
+
+      document.body.classList.add('exam-live');
+      el.assessmentWorkspace.classList.add('live');
+      renderQuestions();
+      updateExamStats();
+      renderLiveBanner('Live session active. Copy, cut, or paste will immediately lock this assessment.');
+      setCandidateStatus(`Session ${state.sessionId} is live. Stay in fullscreen until you submit.`, 'warn');
+      await pushIncident('session_started', 'info', {
+        warning_count: state.warningCount,
+        question_count: questionCount()
+      });
+      beginTimer();
+      history.pushState({ secureExam: true }, '', location.href);
+    }
+
+    function buildSubmissionPayload(status, extra = {}) {
+      const finishedAt = new Date().toISOString();
+      const startedDate = state.startedAt ? new Date(state.startedAt) : new Date();
+      return {
+        session_id: state.sessionId,
+        status,
+        applicant_name: state.applicant.applicant_name,
+        discord_tag: state.applicant.discord_tag,
+        roblox_username: state.applicant.roblox_username,
+        department: state.applicant.department,
+        started_at: state.startedAt,
+        finished_at: finishedAt,
+        duration_seconds: Math.max(0, Math.floor((new Date(finishedAt).getTime() - startedDate.getTime()) / 1000)),
+        warning_count: state.warningCount,
+        terminated_reason: extra.terminatedReason || null,
+        answers: state.answers,
+        violation_snapshot: state.incidents,
+        browser_fingerprint: navigator.userAgent
+      };
+    }
+
+    async function submitAssessment({ timeout = false } = {}) {
+      if (!examIsLive()) return;
+
+      const unanswered = questionCount() - answeredCount();
+      if (!timeout && unanswered > 0) {
+        const proceed = window.confirm(`There are ${unanswered} unanswered questions. Submit anyway? Unanswered questions will be marked wrong.`);
+        if (!proceed) return;
+      }
+
+      clearInterval(timerHandle);
+
+      const payload = buildSubmissionPayload('submitted');
+      const { data, error } = await supabaseClient.rpc('submit_application_assessment', { p_payload: payload });
+
+      if (error) {
+        setCandidateStatus(`Submission failed: ${error.message}`, 'danger');
+        beginTimer();
+        return;
+      }
+
+      state.submitted = true;
+      document.body.classList.remove('exam-live');
+      hideWarningOverlay();
+      renderLiveBanner('');
+      updateExamStats();
+      await pushIncident('session_submitted', 'info', {
+        score_percent: data?.score_percent ?? null,
+        unanswered
+      });
+      showLockOverlay(
+        timeout ? 'Time Expired And Submitted' : 'Assessment Submitted',
+        data?.score_percent !== null && data?.score_percent !== undefined
+          ? `This assessment has been submitted. Score: ${formatPercent(data.score_percent)}. Correct answers: ${data.correct_count ?? '0'} of ${data.total_questions ?? questionCount()}.`
+          : 'This assessment has been submitted successfully.'
+      );
+      try {
+        await document.exitFullscreen();
+      } catch {}
+      if (await hasSignedInAdmin()) {
+        await loadAdminData().catch(() => null);
+      }
+    }
+
+    async function terminateAssessment(reason, incidentType, details = {}) {
+      if (!examIsLive()) return;
+
+      clearInterval(timerHandle);
+      state.terminated = true;
+      state.lockReason = reason;
+
+      const incidentLogged = await pushIncident(incidentType || 'session_locked', 'critical', {
+        reason,
+        ...details
+      });
+
+      const payload = buildSubmissionPayload('terminated', { terminatedReason: reason });
+      const { error } = await supabaseClient.rpc('submit_application_assessment', { p_payload: payload });
+
+      document.body.classList.remove('exam-live');
+      hideWarningOverlay();
+      renderLiveBanner('');
+      updateExamStats();
+      showLockOverlay('Session Locked', reason);
+      setCandidateStatus(incidentLogged
+        ? 'The session has been locked and logged.'
+        : 'The session has been locked. Logging may not have completed.', 'danger');
+
+      try {
+        await document.exitFullscreen();
+      } catch {}
+
+      setTimeout(() => {
+        try {
+          window.close();
+        } catch {}
+      }, 1200);
+
+      if (!error && await hasSignedInAdmin()) {
+        await loadAdminData().catch(() => null);
+      }
+    }
+
+    async function pushIncident(type, level, details = {}) {
+      const incident = {
+        session_id: state.sessionId,
+        applicant_name: state.applicant.applicant_name || null,
+        incident_type: type,
+        incident_level: level,
+        details,
+        created_at: new Date().toISOString()
+      };
+
+      state.incidents.push(incident);
+
+      if (!supabaseClient) return false;
+
+      const { error } = await supabaseClient.rpc('log_application_incident', { p_payload: incident });
+      return !error;
+    }
+
+    function showWarningOverlay(source) {
+      el.warningOverlayCopy.textContent = `Focus was lost because of ${humanizeIncident(source).toLowerCase()}. This is the only warning. Re-enter fullscreen and continue carefully, because the next focus loss will lock the session.`;
+      el.warningOverlay.classList.add('show');
+      el.warningOverlay.setAttribute('aria-hidden', 'false');
+    }
+
+    function showLockOverlay(title, message) {
+      el.lockTitle.textContent = title;
+      el.lockCopy.textContent = message;
+      el.lockOverlay.classList.add('show');
+      el.lockOverlay.setAttribute('aria-hidden', 'false');
+    }
+
+    function hideWarningOverlay() {
+      el.warningOverlay.classList.remove('show');
+      el.warningOverlay.setAttribute('aria-hidden', 'true');
+    }
+
+    function hideLockOverlay() {
+      el.lockOverlay.classList.remove('show');
+      el.lockOverlay.setAttribute('aria-hidden', 'true');
+    }
+
+    async function registerFocusViolation(source) {
+      if (!examIsLive()) return;
+
+      const now = Date.now();
+      if (now - state.lastFocusEventAt < 1800) return;
+      state.lastFocusEventAt = now;
+
+      state.warningCount += 1;
+      updateExamStats();
+
+      await pushIncident(source, state.warningCount <= MAX_FOCUS_WARNINGS ? 'high' : 'critical', {
+        warning_count: state.warningCount,
+        fullscreen: Boolean(document.fullscreenElement)
+      });
+
+      if (state.warningCount <= MAX_FOCUS_WARNINGS) {
+        renderLiveBanner('Warning issued. One more focus break will lock this session.', 'warn');
+        showWarningOverlay(source);
+      } else {
+        await terminateAssessment(`Repeated focus loss triggered a lock. Source: ${humanizeIncident(source)}.`, 'session_locked', {
+          source
+        });
+      }
+    }
+
+    async function registerClipboardViolation(type) {
+      if (!examIsLive()) return;
+      await terminateAssessment(`Clipboard usage was detected (${type}). This assessment has been locked.`, `${type}_attempt`);
+    }
+
+    function isPasteLikeInputType(inputType) {
+      const normalized = String(inputType || '').trim().toLowerCase();
+      return [
+        'insertfrompaste',
+        'insertfrompasteasquotation',
+        'insertfromdrop',
+        'insertfromyank'
+      ].includes(normalized);
+    }
+
+    function blockSaveShortcut(combo) {
+      if (!examIsLive()) return;
+      renderLiveBanner(`Save shortcut blocked (${combo}). The assessment cannot be saved locally while the session is live.`, 'warn');
+      void pushIncident('save_shortcut_blocked', 'medium', { combo });
+    }
+
+    function handleQuestionChange(event) {
+      const input = event.target;
+      if (!(input instanceof HTMLInputElement)) return;
+      if (!input.name.startsWith('question-') || input.type !== 'radio') return;
+
+      const questionId = input.name.replace('question-', '');
+      state.answers[questionId] = input.value;
+      syncSelectedOptions(questionId);
+      updateExamStats();
+    }
+
+    async function signInAdmin() {
+      if (!supabaseClient) {
+        setAdminStatus('Supabase is not configured yet.', 'danger');
+        return;
+      }
+
+      const email = el.adminEmail.value.trim();
+      const password = el.adminPassword.value;
+
+      if (!email || !password) {
+        setAdminStatus('Admin email and password are required.', 'danger');
+        return;
+      }
+
+      setAdminStatus('Signing in...');
+      const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password });
+      if (error) {
+        setAdminStatus(`Sign in failed: ${error.message}`, 'danger');
+        return;
+      }
+
+      setAdminStatus(`Signed in as ${data.user?.email || email}.`, 'warn');
+      await loadAdminData();
+    }
+
+    async function signOutAdmin() {
+      if (!supabaseClient) return;
+      await supabaseClient.auth.signOut();
+      setAdminStatus('Signed out.');
+    }
+
+    async function loadAdminData() {
+      if (!supabaseClient) return;
+
+      setAdminStatus('Loading submissions and incident logs...');
+
+      const [{ data: submissions, error: submissionsError }, { data: incidents, error: incidentsError }] = await Promise.all([
+        supabaseClient
+          .from('assessment_submissions')
+          .select('*')
+          .order('submitted_at', { ascending: false })
+          .limit(200),
+        supabaseClient
+          .from('assessment_incidents')
+          .select('*')
+          .order('created_at', { ascending: false })
+          .limit(300)
+      ]);
+
+      if (submissionsError || incidentsError) {
+        setAdminStatus(`Admin load failed: ${(submissionsError || incidentsError).message}`, 'danger');
+        return;
+      }
+
+      state.adminSubmissions = submissions || [];
+      state.adminIncidents = incidents || [];
+      renderAdminSummary();
+      renderSubmissionTable();
+      renderIncidentTable();
+      renderSubmissionDetail();
+      setAdminStatus(`Loaded ${state.adminSubmissions.length} submissions and ${state.adminIncidents.length} incidents.`, 'warn');
+    }
+
+    function renderAdminSummary() {
+      const submitted = state.adminSubmissions.filter((item) => item.status === 'submitted');
+      const terminated = state.adminSubmissions.filter((item) => item.status === 'terminated');
+      const clipboardCount = state.adminIncidents.filter((item) => /copy|cut|paste/i.test(item.incident_type || '')).length;
+      const average = submitted.length
+        ? submitted.reduce((sum, item) => sum + (Number(item.score_percent) || 0), 0) / submitted.length
+        : 0;
+
+      el.summarySubmitted.textContent = String(submitted.length);
+      el.summaryTerminated.textContent = String(terminated.length);
+      el.summaryAverage.textContent = formatPercent(average);
+      el.summaryClipboard.textContent = String(clipboardCount);
+    }
+
+    function renderSubmissionTable() {
+      if (!state.adminSubmissions.length) {
+        el.submissionTableBody.innerHTML = '<tr><td colspan="7" class="empty-state">No submissions to show yet.</td></tr>';
+        return;
+      }
+
+      el.submissionTableBody.innerHTML = state.adminSubmissions.map((submission) => `
+        <tr>
+          <td>
+            <strong>${escapeHtml(submission.applicant_name || 'Unknown')}</strong><br>
+            <span class="mono">${escapeHtml(submission.roblox_username || 'No Roblox')}</span>
+          </td>
+          <td>${buildTag(submission.status)}</td>
+          <td>${submission.status === 'submitted' ? escapeHtml(formatPercent(submission.score_percent)) : '<span class="mono">Locked</span>'}</td>
+          <td>${escapeHtml(String(submission.warning_count ?? 0))}</td>
+          <td>${escapeHtml(submission.department || 'Unknown')}</td>
+          <td>${escapeHtml(formatDateTime(submission.submitted_at || submission.finished_at))}</td>
+          <td><button class="table-btn" type="button" data-review-id="${escapeHtml(submission.session_id)}">View</button></td>
+        </tr>
+      `).join('');
+    }
+
+    function renderIncidentTable() {
+      if (!state.adminIncidents.length) {
+        el.incidentTableBody.innerHTML = '<tr><td colspan="6" class="empty-state">No incidents to show yet.</td></tr>';
+        return;
+      }
+
+      el.incidentTableBody.innerHTML = state.adminIncidents.map((incident) => `
+        <tr>
+          <td>${escapeHtml(formatDateTime(incident.created_at))}</td>
+          <td>${escapeHtml(incident.applicant_name || 'Unknown')}</td>
+          <td>${buildTag(humanizeIncident(incident.incident_type || 'incident'))}</td>
+          <td>${buildTag(incident.incident_level || 'info')}</td>
+          <td class="mono">${escapeHtml(String(incident.session_id || '').slice(0, 8) || 'Unknown')}</td>
+          <td class="mono">${escapeHtml(JSON.stringify(incident.details || {}))}</td>
+        </tr>
+      `).join('');
+    }
+
+    function renderSubmissionDetail() {
+      const submission = state.adminSubmissions.find((item) => item.session_id === state.detailSubmissionId);
+      if (!submission) {
+        el.detailPanel.classList.remove('show');
+        el.detailTitle.textContent = 'No submission selected.';
+        el.detailCopy.textContent = 'Select a submission from the table above to inspect the answer sheet and integrity summary.';
+        el.detailSummaryGrid.innerHTML = '';
+        el.detailAnswerReview.innerHTML = '';
+        return;
+      }
+
+      const answered = submission.answers || {};
+      const breakdown = submission.graded_breakdown || {};
+
+      el.detailPanel.classList.add('show');
+      el.detailTitle.textContent = `${submission.applicant_name || 'Unknown'} - ${String(submission.status || 'unknown').replace(/_/g, ' ')}`;
+      el.detailCopy.textContent = submission.terminated_reason
+        ? `Terminated reason: ${submission.terminated_reason}`
+        : 'Review the answer sheet below. Correctness is based on the server-side grading result stored in this submission.';
+
+      const cards = [
+        ['Score', submission.status === 'submitted' ? formatPercent(submission.score_percent) : 'Locked'],
+        ['Correct', submission.status === 'submitted' ? `${submission.correct_count ?? 0} / ${submission.total_questions ?? questionCount()}` : 'Not graded'],
+        ['Warnings', String(submission.warning_count ?? 0)],
+        ['Finished', formatDateTime(submission.submitted_at || submission.finished_at)],
+        ['Discord', submission.discord_tag || 'Unknown'],
+        ['Roblox', submission.roblox_username || 'Unknown'],
+        ['Department', submission.department || 'Unknown'],
+        ['Session', submission.session_id || 'Unknown']
+      ];
+
+      el.detailSummaryGrid.innerHTML = cards.map(([label, value]) => `
+        <div class="detail-card">
+          <div class="detail-label">${escapeHtml(label)}</div>
+          <div class="detail-value ${label === 'Score' && submission.status === 'submitted' ? 'good' : ''}">${escapeHtml(value)}</div>
+        </div>
+      `).join('');
+
+      el.detailAnswerReview.innerHTML = state.questions.map((question, index) => {
+        const chosen = answered[question.id] || '';
+        const option = question.options.find((item) => item.key === chosen);
+        const correctness = breakdown[question.id];
+        const statusTag = chosen
+          ? correctness === true
+            ? '<span class="tag good">Correct</span>'
+            : correctness === false
+              ? '<span class="tag danger">Incorrect</span>'
+              : '<span class="tag warn">Recorded</span>'
+          : '<span class="tag warn">Unanswered</span>';
+
+        return `
+          <article class="answer-card">
+            <h4>${index + 1}. ${escapeHtml(question.prompt)}</h4>
+            <p><strong>Chosen:</strong> ${chosen ? `${escapeHtml(chosen)} - ${escapeHtml(option ? option.text : 'Unknown option')}` : 'No answer recorded.'}</p>
+            <div class="status-row">${statusTag}</div>
+          </article>
+        `;
+      }).join('');
+    }
+
+    function bindEvents() {
+      el.tabs.forEach((tab) => {
+        tab.addEventListener('click', () => switchView(tab.dataset.viewTarget));
+      });
+
+      [el.candidateName, el.candidateDiscord, el.candidateRoblox, el.candidateDepartment].forEach((input) => {
+        input.addEventListener('input', saveFormDraft);
+      });
+
+      el.startAssessmentBtn.addEventListener('click', startAssessment);
+      el.reloadFullscreenBtn.addEventListener('click', requestExamFullscreen);
+      el.clearDraftBtn.addEventListener('click', clearFormDraft);
+      el.submitAssessmentBtn.addEventListener('click', () => submitAssessment({ timeout: false }));
+      el.returnToSessionBtn.addEventListener('click', async () => {
+        await requestExamFullscreen();
+        hideWarningOverlay();
+      });
+      el.lockCloseBtn.addEventListener('click', hideLockOverlay);
+      el.questionList.addEventListener('change', handleQuestionChange);
+
+      el.adminSigninBtn.addEventListener('click', signInAdmin);
+      el.adminSignoutBtn.addEventListener('click', signOutAdmin);
+      el.adminRefreshBtn.addEventListener('click', loadAdminData);
+
+      el.submissionTableBody.addEventListener('click', (event) => {
+        const target = event.target;
+        if (!(target instanceof HTMLElement)) return;
+        const reviewId = target.getAttribute('data-review-id');
+        if (!reviewId) return;
+        state.detailSubmissionId = reviewId;
+        renderSubmissionDetail();
+      });
+
+      document.addEventListener('visibilitychange', () => {
+        if (document.hidden) {
+          registerFocusViolation('tab_hidden');
+        }
+      });
+
+      window.addEventListener('blur', () => registerFocusViolation('window_blur'));
+      document.addEventListener('fullscreenchange', () => {
+        if (examIsLive() && !document.fullscreenElement) {
+          registerFocusViolation('fullscreen_exit');
+        }
+      });
+
+      window.addEventListener('popstate', () => {
+        if (examIsLive()) {
+          history.pushState({ secureExam: true }, '', location.href);
+          registerFocusViolation('navigation_attempt');
+        }
+      });
+
+      window.addEventListener('beforeunload', (event) => {
+        if (!examIsLive()) return;
+        event.preventDefault();
+        event.returnValue = '';
+      });
+
+      document.addEventListener('copy', (event) => {
+        if (!examIsLive()) return;
+        event.preventDefault();
+        registerClipboardViolation('copy');
+      });
+
+      document.addEventListener('cut', (event) => {
+        if (!examIsLive()) return;
+        event.preventDefault();
+        registerClipboardViolation('cut');
+      });
+
+      document.addEventListener('paste', (event) => {
+        if (!examIsLive()) return;
+        event.preventDefault();
+        registerClipboardViolation('paste');
+      });
+
+      document.addEventListener('beforeinput', (event) => {
+        if (!examIsLive()) return;
+        if (!isPasteLikeInputType(event.inputType)) return;
+        event.preventDefault();
+        registerClipboardViolation('beforeinput_paste');
+      }, true);
+
+      document.addEventListener('input', (event) => {
+        if (!examIsLive()) return;
+        if (!isPasteLikeInputType(event.inputType)) return;
+        registerClipboardViolation('input_paste');
+      }, true);
+
+      document.addEventListener('dragover', (event) => {
+        if (!examIsLive()) return;
+        event.preventDefault();
+      }, true);
+
+      document.addEventListener('drop', (event) => {
+        if (!examIsLive()) return;
+        event.preventDefault();
+        registerClipboardViolation('drop_paste');
+      }, true);
+
+      document.addEventListener('contextmenu', (event) => {
+        if (!examIsLive()) return;
+        event.preventDefault();
+      });
+
+      document.addEventListener('keydown', (event) => {
+        if (!examIsLive()) return;
+
+        const key = event.key.toLowerCase();
+        const ctrl = event.ctrlKey || event.metaKey;
+        const combo = `${ctrl ? 'ctrl+' : ''}${event.shiftKey ? 'shift+' : ''}${key}`;
+
+        if (event.shiftKey && key === 'insert') {
+          event.preventDefault();
+          registerClipboardViolation('shift_insert_paste');
+          return;
+        }
+
+        if (ctrl && key === 's') {
+          event.preventDefault();
+          blockSaveShortcut(combo);
+          return;
+        }
+
+        if (ctrl && ['c', 'x', 'v'].includes(key)) {
+          event.preventDefault();
+          registerClipboardViolation(
+            key === 'c'
+              ? 'copy'
+              : key === 'x'
+                ? 'cut'
+                : 'paste_shortcut'
+          );
+          return;
+        }
+
+        if (
+          key === 'f12' ||
+          (ctrl && event.shiftKey && ['i', 'j', 'c'].includes(key)) ||
+          (ctrl && ['u', 'p', 'a'].includes(key))
+        ) {
+          event.preventDefault();
+          registerFocusViolation('blocked_shortcut');
+          renderLiveBanner(`Restricted shortcut blocked (${combo}). Another focus or inspection event will lock the session.`, 'warn');
+        }
+      });
+    }
+
+    async function bootstrap() {
+      restoreFormDraft();
+      bindEvents();
+      await initSupabase();
+      await loadQuestions();
+
+      if (supabaseClient) {
+        const { data: sessionData } = await supabaseClient.auth.getSession();
+        if (sessionData?.session?.user) {
+          await loadAdminData().catch(() => null);
+        }
+      }
+    }
+
+    bootstrap();
+  </script>
+</body>
+</html>
