@@ -56,6 +56,14 @@
       overflow: hidden;
     }
 
+    body.exam-live .assessment-hero {
+      display: none;
+    }
+
+    body.exam-live #assessment-view.active {
+      display: block;
+    }
+
     body.exam-live #question-list,
     body.exam-live #question-list * {
       user-select: none;
@@ -971,7 +979,7 @@
     </header>
 
     <section class="view active" id="assessment-view">
-      <div class="hero-grid">
+      <div class="hero-grid assessment-hero" id="assessment-intro-grid">
         <article class="panel">
           <div class="panel-body">
             <div class="panel-kicker">Candidate Session</div>
@@ -1272,6 +1280,8 @@
       startAssessmentBtn: document.getElementById('start-assessment-btn'),
       clearDraftBtn: document.getElementById('clear-draft-btn'),
       reloadFullscreenBtn: document.getElementById('reload-fullscreen-btn'),
+      assessmentView: document.getElementById('assessment-view'),
+      assessmentIntroGrid: document.getElementById('assessment-intro-grid'),
       assessmentWorkspace: document.getElementById('assessment-workspace'),
       questionList: document.getElementById('question-list'),
       answeredCount: document.getElementById('answered-count'),
@@ -1307,6 +1317,10 @@
       detailSummaryGrid: document.getElementById('detail-summary-grid'),
       detailAnswerReview: document.getElementById('detail-answer-review')
     };
+
+    if (el.startAssessmentBtn) {
+      el.startAssessmentBtn.disabled = true;
+    }
 
     function escapeHtml(value) {
       return String(value ?? '')
@@ -1380,6 +1394,18 @@
       if (!supabaseClient) return false;
       const { data } = await supabaseClient.auth.getSession();
       return Boolean(data?.session?.user);
+    }
+
+    async function isApprovedAdmin() {
+      if (!supabaseClient) return false;
+
+      const { data, error } = await supabaseClient.rpc('is_assessment_admin');
+      if (error) {
+        setAdminStatus(`Admin verification failed: ${error.message}`, 'danger');
+        return false;
+      }
+
+      return Boolean(data);
     }
 
     function questionCount() {
@@ -1483,12 +1509,18 @@
 
       const { data: sessionData } = await supabaseClient.auth.getSession();
       if (sessionData?.session?.user?.email) {
-        setAdminStatus(`Signed in as ${sessionData.session.user.email}.`, 'warn');
+        const approved = await isApprovedAdmin();
+        if (approved) {
+          setAdminStatus(`Signed in through Supabase as ${sessionData.session.user.email}.`, 'warn');
+        } else {
+          await supabaseClient.auth.signOut();
+          setAdminStatus('This Supabase account is not approved for the admin panel.', 'danger');
+        }
       }
 
       supabaseClient.auth.onAuthStateChange((_event, session) => {
         if (session?.user?.email) {
-          setAdminStatus(`Signed in as ${session.user.email}.`, 'warn');
+          setAdminStatus(`Signed in through Supabase as ${session.user.email}. Verifying access...`, 'warn');
         } else {
           setAdminStatus('Not signed in.');
           state.adminSubmissions = [];
@@ -1534,10 +1566,12 @@
       updateExamStats();
 
       if (!state.questions.length) {
+        el.startAssessmentBtn.disabled = true;
         setCandidateStatus('No active questions were returned. Seed the question bank in Supabase first.', 'danger');
         return;
       }
 
+      el.startAssessmentBtn.disabled = false;
       const countMessage = state.questions.length === EXPECTED_QUESTION_COUNT
         ? `Loaded ${state.questions.length} questions. The portal is ready for candidate sessions.`
         : `Loaded ${state.questions.length} questions. This page expects ${EXPECTED_QUESTION_COUNT} for the default layout.`;
@@ -1645,12 +1679,27 @@
       return '';
     }
 
-    async function requestExamFullscreen() {
+    async function requestExamFullscreen({ allowSoftFailure = true } = {}) {
       try {
         if (document.fullscreenElement) return true;
+        if (typeof document.documentElement.requestFullscreen !== 'function') {
+          if (allowSoftFailure) {
+            setCandidateStatus('Fullscreen is unavailable in this browser. The assessment will still run with focus and paste monitoring.', 'warn');
+            return false;
+          }
+
+          setCandidateStatus('Fullscreen is unavailable in this browser.', 'danger');
+          return false;
+        }
+
         await document.documentElement.requestFullscreen();
         return true;
       } catch (error) {
+        if (allowSoftFailure) {
+          setCandidateStatus(`Fullscreen could not be enabled: ${error.message}. The assessment will still run, but focus violations are still monitored.`, 'warn');
+          return false;
+        }
+
         setCandidateStatus(`Fullscreen was blocked: ${error.message}`, 'danger');
         return false;
       }
@@ -1692,8 +1741,9 @@
         return;
       }
 
-      const fullscreenOk = await requestExamFullscreen();
-      if (!fullscreenOk) return;
+      hideLockOverlay();
+      hideWarningOverlay();
+      const fullscreenOk = await requestExamFullscreen({ allowSoftFailure: true });
 
       state.applicant = applicant;
       state.answers = {};
@@ -1702,19 +1752,31 @@
       state.submitted = false;
       state.terminated = false;
       state.lockReason = '';
+      state.lastFocusEventAt = 0;
       state.sessionId = crypto.randomUUID();
       state.startedAt = new Date().toISOString();
       state.endsAt = Date.now() + (EXAM_DURATION_MINUTES * 60 * 1000);
 
       document.body.classList.add('exam-live');
       el.assessmentWorkspace.classList.add('live');
+      el.assessmentView.scrollIntoView({ behavior: 'smooth', block: 'start' });
       renderQuestions();
       updateExamStats();
-      renderLiveBanner('Live session active. Copy, cut, or paste will immediately lock this assessment.');
-      setCandidateStatus(`Session ${state.sessionId} is live. Stay in fullscreen until you submit.`, 'warn');
+      renderLiveBanner(
+        fullscreenOk
+          ? 'Live session active. Copy, cut, or paste will immediately lock this assessment.'
+          : 'Live session active without fullscreen. Focus loss, tab switching, and paste attempts are still monitored.'
+      );
+      setCandidateStatus(
+        fullscreenOk
+          ? `Session ${state.sessionId} is live. Stay in fullscreen until you submit.`
+          : `Session ${state.sessionId} is live. Fullscreen was unavailable, but security monitoring is still active.`,
+        'warn'
+      );
       await pushIncident('session_started', 'info', {
         warning_count: state.warningCount,
-        question_count: questionCount()
+        question_count: questionCount(),
+        fullscreen_entered: fullscreenOk
       });
       beginTimer();
       history.pushState({ secureExam: true }, '', location.href);
@@ -1942,7 +2004,14 @@
         return;
       }
 
-      setAdminStatus(`Signed in as ${data.user?.email || email}.`, 'warn');
+      const approved = await isApprovedAdmin();
+      if (!approved) {
+        await supabaseClient.auth.signOut();
+        setAdminStatus('This Supabase account is valid, but it is not approved for the admin panel.', 'danger');
+        return;
+      }
+
+      setAdminStatus(`Signed in through Supabase as ${data.user?.email || email}.`, 'warn');
       await loadAdminData();
     }
 
@@ -1954,6 +2023,17 @@
 
     async function loadAdminData() {
       if (!supabaseClient) return;
+
+      if (!(await hasSignedInAdmin())) {
+        setAdminStatus('Sign in through Supabase to load admin data.', 'danger');
+        return;
+      }
+
+      const approved = await isApprovedAdmin();
+      if (!approved) {
+        setAdminStatus('This account is not approved for the admin panel.', 'danger');
+        return;
+      }
 
       setAdminStatus('Loading submissions and incident logs...');
 
