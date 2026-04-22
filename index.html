@@ -64,6 +64,14 @@
       display: block;
     }
 
+    body:not(.admin-authenticated) .admin-secure-content {
+      display: none;
+    }
+
+    body.admin-authenticated #admin-locked-card {
+      display: none;
+    }
+
     body.exam-live #question-list,
     body.exam-live #question-list * {
       user-select: none;
@@ -828,6 +836,13 @@
       margin-top: 14px;
     }
 
+    .auth-gate {
+      min-height: 100%;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+    }
+
     .overlay {
       position: fixed;
       inset: 0;
@@ -1113,7 +1128,15 @@
           </div>
         </article>
 
-        <article class="panel">
+        <article class="panel" id="admin-locked-card">
+          <div class="panel-body auth-gate">
+            <div class="panel-kicker">Supervisor Gate</div>
+            <h2>Sign In To Open The Admin Panel</h2>
+            <p>Admin review content stays hidden until a supervisor signs in through Supabase and passes the approval check in <span class="mono">assessment_admins</span>. Click the Admin Panel tab, sign in, and then the dashboard, submissions, and incidents will unlock.</p>
+          </div>
+        </article>
+
+        <article class="panel admin-secure-content">
           <div class="panel-body">
             <div class="panel-kicker">Dashboard Summary</div>
             <h2>Submission Health</h2>
@@ -1140,7 +1163,7 @@
         </article>
       </div>
 
-      <article class="panel">
+      <article class="panel admin-secure-content">
         <div class="table-shell">
           <div class="table-head">
             <div>
@@ -1169,7 +1192,7 @@
         </div>
       </article>
 
-      <article class="panel">
+      <article class="panel admin-secure-content">
         <div class="table-shell">
           <div class="table-head">
             <div>
@@ -1197,7 +1220,7 @@
         </div>
       </article>
 
-      <article class="panel detail-panel" id="submission-detail-panel">
+      <article class="panel detail-panel admin-secure-content" id="submission-detail-panel">
         <div class="panel-body">
           <div class="table-head">
             <div>
@@ -1305,6 +1328,7 @@
       adminRefreshBtn: document.getElementById('admin-refresh-btn'),
       adminSignoutBtn: document.getElementById('admin-signout-btn'),
       adminStatus: document.getElementById('admin-status'),
+      adminLockedCard: document.getElementById('admin-locked-card'),
       summarySubmitted: document.getElementById('summary-submitted'),
       summaryTerminated: document.getElementById('summary-terminated'),
       summaryAverage: document.getElementById('summary-average'),
@@ -1320,6 +1344,18 @@
 
     if (el.startAssessmentBtn) {
       el.startAssessmentBtn.disabled = true;
+    }
+
+    function setAdminAuthenticated(isAuthenticated) {
+      document.body.classList.toggle('admin-authenticated', Boolean(isAuthenticated));
+      el.adminRefreshBtn.disabled = !isAuthenticated;
+      el.adminSignoutBtn.disabled = !isAuthenticated;
+      el.adminSigninBtn.disabled = Boolean(isAuthenticated);
+
+      if (!isAuthenticated) {
+        state.detailSubmissionId = null;
+        renderSubmissionDetail();
+      }
     }
 
     function escapeHtml(value) {
@@ -1347,6 +1383,29 @@
     function setAdminStatus(message, tone = 'default') {
       el.adminStatus.textContent = message;
       el.adminStatus.className = `status-box${tone === 'warn' ? ' warn' : tone === 'danger' ? ' danger' : ''}`;
+    }
+
+    async function openAdminPanel() {
+      switchView('admin-view');
+
+      if (!(await hasSignedInAdmin())) {
+        setAdminAuthenticated(false);
+        setAdminStatus('Sign in through Supabase to continue to the admin panel.', 'warn');
+        requestAnimationFrame(() => el.adminEmail.focus());
+        return;
+      }
+
+      const approved = await isApprovedAdmin();
+      if (!approved) {
+        await supabaseClient.auth.signOut();
+        setAdminAuthenticated(false);
+        setAdminStatus('This Supabase account is not approved for the admin panel.', 'danger');
+        requestAnimationFrame(() => el.adminEmail.focus());
+        return;
+      }
+
+      setAdminAuthenticated(true);
+      await loadAdminData();
     }
 
     function switchView(targetId) {
@@ -1511,17 +1570,22 @@
       if (sessionData?.session?.user?.email) {
         const approved = await isApprovedAdmin();
         if (approved) {
+          setAdminAuthenticated(true);
           setAdminStatus(`Signed in through Supabase as ${sessionData.session.user.email}.`, 'warn');
         } else {
           await supabaseClient.auth.signOut();
+          setAdminAuthenticated(false);
           setAdminStatus('This Supabase account is not approved for the admin panel.', 'danger');
         }
+      } else {
+        setAdminAuthenticated(false);
       }
 
       supabaseClient.auth.onAuthStateChange((_event, session) => {
         if (session?.user?.email) {
           setAdminStatus(`Signed in through Supabase as ${session.user.email}. Verifying access...`, 'warn');
         } else {
+          setAdminAuthenticated(false);
           setAdminStatus('Not signed in.');
           state.adminSubmissions = [];
           state.adminIncidents = [];
@@ -2011,6 +2075,7 @@
         return;
       }
 
+      setAdminAuthenticated(true);
       setAdminStatus(`Signed in through Supabase as ${data.user?.email || email}.`, 'warn');
       await loadAdminData();
     }
@@ -2031,10 +2096,12 @@
 
       const approved = await isApprovedAdmin();
       if (!approved) {
+        setAdminAuthenticated(false);
         setAdminStatus('This account is not approved for the admin panel.', 'danger');
         return;
       }
 
+      setAdminAuthenticated(true);
       setAdminStatus('Loading submissions and incident logs...');
 
       const [{ data: submissions, error: submissionsError }, { data: incidents, error: incidentsError }] = await Promise.all([
@@ -2180,7 +2247,14 @@
 
     function bindEvents() {
       el.tabs.forEach((tab) => {
-        tab.addEventListener('click', () => switchView(tab.dataset.viewTarget));
+        tab.addEventListener('click', () => {
+          if (tab.dataset.viewTarget === 'admin-view') {
+            void openAdminPanel();
+            return;
+          }
+
+          switchView(tab.dataset.viewTarget);
+        });
       });
 
       [el.candidateName, el.candidateDiscord, el.candidateRoblox, el.candidateDepartment].forEach((input) => {
