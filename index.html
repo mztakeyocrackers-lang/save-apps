@@ -1438,7 +1438,6 @@
 
     let supabaseClient = null;
     let timerHandle = null;
-    let submitConfirmTimer = null;
 
     const el = {
       views: document.querySelectorAll('.view'),
@@ -1767,8 +1766,8 @@
 
     async function initSupabase() {
       if (!window.supabase || !APP_CONFIG.supabaseUrl || !APP_CONFIG.supabaseAnonKey) {
-        setCandidateStatus('Supabase is not configured in yes.html yet. Add your URL and anon key first.', 'danger');
-        setAdminStatus('Supabase is not configured in yes.html yet.', 'danger');
+        setCandidateStatus('Supabase is not configured in this portal yet. Add your URL and anon key first.', 'danger');
+        setAdminStatus('Supabase is not configured in this portal yet.', 'danger');
         return;
       }
 
@@ -2171,23 +2170,9 @@
 
     function disarmSubmitConfirmation({ keepButtonText = false } = {}) {
       state.submitConfirmArmed = false;
-      clearTimeout(submitConfirmTimer);
-      submitConfirmTimer = null;
       if (!keepButtonText && !state.submissionInProgress && !state.submitted && !state.terminated) {
         el.submitAssessmentBtn.textContent = 'Submit Assessment';
       }
-    }
-
-    function armSubmitConfirmation(unanswered) {
-      state.submitConfirmArmed = true;
-      clearTimeout(submitConfirmTimer);
-      el.submitAssessmentBtn.textContent = `Confirm Submit (${unanswered} Unanswered)`;
-      renderLiveBanner(`${unanswered} question(s) are still unanswered. Click Submit again within 10 seconds to confirm.`, 'warn');
-      submitConfirmTimer = setTimeout(() => {
-        if (!state.submitConfirmArmed || state.submissionInProgress || state.submitted || state.terminated) return;
-        disarmSubmitConfirmation();
-        renderLiveBanner('Submit confirmation expired. Review the page, then click Submit again when ready.', 'warn');
-      }, 10000);
     }
 
     function disableAssessmentInputs() {
@@ -2293,6 +2278,48 @@
       }
     }
 
+    function buildFallbackSubmissionData(payload) {
+      return {
+        session_id: payload.session_id,
+        status: payload.status,
+        applicant_name: payload.applicant_name,
+        discord_tag: payload.discord_tag,
+        roblox_username: payload.roblox_username,
+        department: payload.department,
+        started_at: payload.started_at,
+        finished_at: payload.finished_at,
+        submitted_at: payload.finished_at,
+        duration_seconds: payload.duration_seconds,
+        warning_count: payload.warning_count,
+        terminated_reason: payload.terminated_reason,
+        score_percent: null,
+        correct_count: null,
+        total_questions: state.questions.filter((question) => !isWrittenQuestion(question)).length,
+        answers: payload.answers,
+        graded_breakdown: {},
+        violation_snapshot: payload.violation_snapshot,
+        browser_fingerprint: payload.browser_fingerprint
+      };
+    }
+
+    async function tryFetchFallbackSubmission(sessionId) {
+      try {
+        const lookupResult = await supabaseClient
+          .from('assessment_submissions')
+          .select('*')
+          .eq('session_id', sessionId)
+          .maybeSingle();
+
+        if (lookupResult.error) {
+          return null;
+        }
+
+        return lookupResult.data || null;
+      } catch {
+        return null;
+      }
+    }
+
     async function upsertSubmissionFallback(payload) {
       const fallbackRow = {
         session_id: payload.session_id,
@@ -2319,9 +2346,7 @@
       try {
         const fallbackResult = await supabaseClient
           .from('assessment_submissions')
-          .upsert(fallbackRow, { onConflict: 'session_id' })
-          .select()
-          .single();
+          .upsert(fallbackRow, { onConflict: 'session_id' });
 
         if (fallbackResult.error) {
           return {
@@ -2332,10 +2357,11 @@
           };
         }
 
+        const fetchedRow = await tryFetchFallbackSubmission(payload.session_id);
         return {
           ok: true,
           via: 'fallback',
-          data: fallbackResult.data || null,
+          data: fetchedRow || buildFallbackSubmissionData(payload),
           error: null
         };
       } catch (error) {
@@ -2416,9 +2442,12 @@
       if (state.submissionInProgress) return;
 
       const unanswered = questionCount() - answeredCount();
-      if (!timeout && unanswered > 0 && !state.submitConfirmArmed) {
-        armSubmitConfirmation(unanswered);
-        return;
+      if (!timeout && unanswered > 0) {
+        const proceed = window.confirm(`There are ${unanswered} unanswered question(s). Submit anyway? Unanswered questions will be marked incomplete.`);
+        if (!proceed) {
+          renderLiveBanner('Submission cancelled so you can keep working.', 'warn');
+          return;
+        }
       }
 
       disarmSubmitConfirmation({ keepButtonText: true });
