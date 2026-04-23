@@ -1793,7 +1793,22 @@
         setAdminAuthenticated(false);
       }
 
-      supabaseClient.auth.onAuthStateChange((_event, session) => {
+      supabaseClient.auth.onAuthStateChange(async (_event, session) => {
+        if (!session && (examIsLive() || state.submissionInProgress)) {
+          const refreshResult = await tryRefreshCandidateSession();
+          if (refreshResult.ok) {
+            renderLiveBanner('Connection session was refreshed. Your answers are still here and you can submit normally.', 'warn');
+            return;
+          }
+
+          state.submissionInProgress = false;
+          el.submitAssessmentBtn.disabled = false;
+          renderLiveBanner('Connection session expired. Your answers are preserved. Click Submit to try again.', 'warn');
+          setCandidateStatus('Supabase session changed during the live exam. Answers were kept, and submission was unlocked so the candidate can retry.', 'warn');
+          beginTimer();
+          return;
+        }
+
         if (session?.user?.email) {
           setAdminStatus(`Signed in through Supabase as ${session.user.email}. Verifying access...`, 'warn');
         } else {
@@ -2111,65 +2126,166 @@
       };
     }
 
+    function looksLikeAuthError(error) {
+      if (!error) return false;
+
+      const message = String(error.message || error.error_description || error.details || '').toLowerCase();
+      const code = String(error.code || error.status || '').toLowerCase();
+
+      return [
+        'jwt',
+        'token',
+        'expired',
+        'refresh',
+        'auth',
+        'session',
+        'unauthorized',
+        'forbidden',
+        'invalid claim'
+      ].some((needle) => message.includes(needle) || code.includes(needle));
+    }
+
+    async function tryRefreshCandidateSession() {
+      if (!supabaseClient?.auth) return { ok: false, error: null, refreshed: false };
+
+      try {
+        const refreshResult = await supabaseClient.auth.refreshSession();
+        if (refreshResult.error) {
+          return { ok: false, error: refreshResult.error, refreshed: false };
+        }
+
+        return {
+          ok: Boolean(refreshResult.data?.session),
+          error: null,
+          refreshed: Boolean(refreshResult.data?.session)
+        };
+      } catch (error) {
+        return { ok: false, error, refreshed: false };
+      }
+    }
+
     async function persistSubmission(payload) {
-      const rpcResult = await supabaseClient.rpc('submit_application_assessment', { p_payload: payload });
-      if (!rpcResult.error) {
+      const attemptPersist = async () => {
+        const rpcResult = await supabaseClient.rpc('submit_application_assessment', { p_payload: payload });
+        if (!rpcResult.error) {
+          return {
+            ok: true,
+            via: 'rpc',
+            data: rpcResult.data || null,
+            error: null
+          };
+        }
+
+        const fallbackRow = {
+          session_id: payload.session_id,
+          status: payload.status,
+          applicant_name: payload.applicant_name,
+          discord_tag: payload.discord_tag,
+          roblox_username: payload.roblox_username,
+          department: payload.department,
+          started_at: payload.started_at,
+          finished_at: payload.finished_at,
+          submitted_at: payload.finished_at,
+          duration_seconds: payload.duration_seconds,
+          warning_count: payload.warning_count,
+          terminated_reason: payload.terminated_reason,
+          answers: payload.answers,
+          violation_snapshot: payload.violation_snapshot,
+          browser_fingerprint: payload.browser_fingerprint,
+          score_percent: null,
+          correct_count: null,
+          total_questions: state.questions.filter((question) => !isWrittenQuestion(question)).length,
+          graded_breakdown: {}
+        };
+
+        const fallbackResult = await supabaseClient
+          .from('assessment_submissions')
+          .insert(fallbackRow)
+          .select()
+          .single();
+
+        if (fallbackResult.error) {
+          return {
+            ok: false,
+            via: 'fallback',
+            data: null,
+            error: {
+              primary: rpcResult.error,
+              fallback: fallbackResult.error
+            }
+          };
+        }
+
         return {
           ok: true,
-          via: 'rpc',
-          data: rpcResult.data || null,
-          error: null
-        };
-      }
-
-      const fallbackRow = {
-        session_id: payload.session_id,
-        status: payload.status,
-        applicant_name: payload.applicant_name,
-        discord_tag: payload.discord_tag,
-        roblox_username: payload.roblox_username,
-        department: payload.department,
-        started_at: payload.started_at,
-        finished_at: payload.finished_at,
-        submitted_at: payload.finished_at,
-        duration_seconds: payload.duration_seconds,
-        warning_count: payload.warning_count,
-        terminated_reason: payload.terminated_reason,
-        answers: payload.answers,
-        violation_snapshot: payload.violation_snapshot,
-        browser_fingerprint: payload.browser_fingerprint,
-        score_percent: null,
-        correct_count: null,
-        total_questions: state.questions.filter((question) => !isWrittenQuestion(question)).length,
-        graded_breakdown: {}
-      };
-
-      const fallbackResult = await supabaseClient
-        .from('assessment_submissions')
-        .insert(fallbackRow)
-        .select()
-        .single();
-
-      if (fallbackResult.error) {
-        return {
-          ok: false,
           via: 'fallback',
-          data: null,
+          data: fallbackResult.data,
           error: {
-            primary: rpcResult.error,
-            fallback: fallbackResult.error
+            primary: rpcResult.error
           }
         };
-      }
-
-      return {
-        ok: true,
-        via: 'fallback',
-        data: fallbackResult.data,
-        error: {
-          primary: rpcResult.error
-        }
       };
+
+      try {
+        const firstAttempt = await attemptPersist();
+        const firstError = firstAttempt.error?.primary || firstAttempt.error?.fallback || null;
+        if (firstAttempt.ok || !looksLikeAuthError(firstError)) {
+          return firstAttempt;
+        }
+
+        const refreshResult = await tryRefreshCandidateSession();
+        if (!refreshResult.ok) {
+          return {
+            ...firstAttempt,
+            error: {
+              ...(firstAttempt.error || {}),
+              refresh: refreshResult.error || { message: 'Session refresh failed.' }
+            }
+          };
+        }
+
+        const secondAttempt = await attemptPersist();
+        if (secondAttempt.ok) {
+          return {
+            ...secondAttempt,
+            refreshedSessionBeforeSubmit: true
+          };
+        }
+
+        return {
+          ...secondAttempt,
+          refreshedSessionBeforeSubmit: true,
+          error: {
+            ...(secondAttempt.error || {}),
+            refresh: null
+          }
+        };
+      } catch (error) {
+        if (!looksLikeAuthError(error)) {
+          throw error;
+        }
+
+        const refreshResult = await tryRefreshCandidateSession();
+        if (!refreshResult.ok) {
+          throw Object.assign(new Error(error?.message || 'Submission failed after session refresh attempt.'), {
+            cause: error,
+            refreshError: refreshResult.error || null
+          });
+        }
+
+        const retriedResult = await attemptPersist();
+        if (retriedResult.ok) {
+          return {
+            ...retriedResult,
+            refreshedSessionBeforeSubmit: true
+          };
+        }
+
+        return {
+          ...retriedResult,
+          refreshedSessionBeforeSubmit: true
+        };
+      }
     }
 
     async function submitAssessment({ timeout = false, confirmed = false } = {}) {
@@ -2207,7 +2323,8 @@
         el.submitAssessmentBtn.disabled = false;
         const primaryMessage = submissionResult.error?.primary?.message || 'Primary submission RPC failed.';
         const fallbackMessage = submissionResult.error?.fallback?.message || 'Fallback insert failed.';
-        setCandidateStatus(`Submission failed: ${primaryMessage} | Fallback failed: ${fallbackMessage}`, 'danger');
+        const refreshMessage = submissionResult.error?.refresh?.message ? ` | Refresh failed: ${submissionResult.error.refresh.message}` : '';
+        setCandidateStatus(`Submission failed: ${primaryMessage} | Fallback failed: ${fallbackMessage}${refreshMessage}`, 'danger');
         renderLiveBanner('Submission failed. You are still in the live session. Fix the problem and submit again.', 'danger');
         beginTimer();
         return;
@@ -2223,7 +2340,9 @@
       renderLiveBanner(
         submissionResult.via === 'fallback'
           ? 'Assessment submitted using the table fallback. Fullscreen is still active, and scoring may need admin review.'
-          : 'Assessment submitted successfully. Fullscreen is being kept active on purpose until you leave manually.',
+          : submissionResult.refreshedSessionBeforeSubmit
+            ? 'Assessment submitted successfully after refreshing the connection session. Fullscreen is still being kept active on purpose.'
+            : 'Assessment submitted successfully. Fullscreen is being kept active on purpose until you leave manually.',
         'warn'
       );
       updateExamStats();
