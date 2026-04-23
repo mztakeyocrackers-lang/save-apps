@@ -1429,7 +1429,9 @@
       lastFocusEventAt: 0,
       adminSubmissions: [],
       adminIncidents: [],
-      detailSubmissionId: null
+      detailSubmissionId: null,
+      submissionInProgress: false,
+      allowFullscreenExit: false
     };
 
     let supabaseClient = null;
@@ -2110,31 +2112,40 @@
     }
 
     async function submitAssessment({ timeout = false, confirmed = false } = {}) {
-  if (!examIsLive()) return;
+      if (!examIsLive()) return;
+      if (state.submissionInProgress) return;
 
-  const unanswered = questionCount() - answeredCount();
-  if (!timeout && unanswered > 0 && !confirmed) {
-    renderLiveBanner(`${unanswered} question(s) unanswered. Click Submit again to confirm.`, 'warn');
-    el.submitAssessmentBtn.dataset.pendingConfirm = 'true';
-    return;
-  }
+      const unanswered = questionCount() - answeredCount();
+      if (!timeout && unanswered > 0 && !confirmed) {
+        renderLiveBanner(`${unanswered} question(s) unanswered. Click Submit again to confirm.`, 'warn');
+        el.submitAssessmentBtn.dataset.pendingConfirm = 'true';
+        return;
+      }
 
+      state.submissionInProgress = true;
+      el.submitAssessmentBtn.disabled = true;
+      renderLiveBanner('Submitting assessment. Stay on this page and remain in fullscreen until the submission confirmation appears.', 'warn');
       clearInterval(timerHandle);
 
       const payload = buildSubmissionPayload('submitted');
       const { data, error } = await supabaseClient.rpc('submit_application_assessment', { p_payload: payload });
 
       if (error) {
+        state.submissionInProgress = false;
+        el.submitAssessmentBtn.disabled = false;
         setCandidateStatus(`Submission failed: ${error.message}`, 'danger');
+        renderLiveBanner('Submission failed. You are still in the live session. Fix the problem and submit again.', 'danger');
         beginTimer();
         return;
       }
 
       state.submitted = true;
+      state.submissionInProgress = false;
+      el.submitAssessmentBtn.disabled = false;
       document.body.classList.remove('exam-live');
       el.assessmentWorkspace.classList.remove('live');
       hideWarningOverlay();
-      renderLiveBanner('');
+      renderLiveBanner('Assessment submitted successfully. Fullscreen is being kept active on purpose until you leave manually.', 'warn');
       updateExamStats();
       await pushIncident('session_submitted', 'info', {
         score_percent: data?.score_percent ?? null,
@@ -2143,12 +2154,9 @@
       showLockOverlay(
         timeout ? 'Time Expired And Submitted' : 'Assessment Submitted',
         data?.score_percent !== null && data?.score_percent !== undefined
-          ? `This assessment has been submitted. Score: ${formatPercent(data.score_percent)}. Correct answers: ${data.correct_count ?? '0'} of ${data.total_questions ?? questionCount()}.`
-          : 'This assessment has been submitted successfully.'
+          ? `This assessment has been submitted. Score: ${formatPercent(data.score_percent)}. Correct answers: ${data.correct_count ?? '0'} of ${data.total_questions ?? questionCount()}. Fullscreen has been left on intentionally so no exit warning is triggered during submission.`
+          : 'This assessment has been submitted successfully. Fullscreen has been left on intentionally so no exit warning is triggered during submission.'
       );
-      try {
-        await document.exitFullscreen();
-      } catch {}
       if (await hasSignedInAdmin()) {
         await loadAdminData().catch(() => null);
       }
@@ -2230,13 +2238,25 @@
       el.warningOverlay.setAttribute('aria-hidden', 'true');
     }
 
+    async function exitFullscreenSafely() {
+      if (!document.fullscreenElement || typeof document.exitFullscreen !== 'function') return;
+      state.allowFullscreenExit = true;
+      try {
+        await document.exitFullscreen();
+      } catch {}
+      setTimeout(() => {
+        state.allowFullscreenExit = false;
+      }, 250);
+    }
+
     function hideLockOverlay() {
       el.lockOverlay.classList.remove('show');
       el.lockOverlay.setAttribute('aria-hidden', 'true');
+      void exitFullscreenSafely();
     }
 
     async function registerFocusViolation(source) {
-      if (!examIsLive()) return;
+      if (!examIsLive() || state.submissionInProgress) return;
 
       const now = Date.now();
       if (now - state.lastFocusEventAt < 1800) return;
@@ -2628,7 +2648,8 @@
 
       window.addEventListener('blur', () => registerFocusViolation('window_blur'));
       document.addEventListener('fullscreenchange', () => {
-        if (examIsLive() && !document.fullscreenElement) {
+        if (state.allowFullscreenExit) return;
+        if ((examIsLive() || state.submissionInProgress) && !document.fullscreenElement) {
           registerFocusViolation('fullscreen_exit');
         }
       });
