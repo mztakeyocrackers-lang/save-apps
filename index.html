@@ -2110,7 +2110,13 @@
     }
 
     async function submitAssessment({ timeout = false } = {}) {
-      if (!examIsLive()) return;
+      // Block Ctrl+S / Cmd+S at all times — not just during the exam
+        if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 's') {
+          event.preventDefault();
+          return;
+        }
+
+        if (!examIsLive()) return;
 
       const unanswered = questionCount() - answeredCount();
       if (!timeout && unanswered > 0) {
