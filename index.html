@@ -1411,6 +1411,7 @@
     const MAX_FOCUS_WARNINGS = 1;
     const EXPECTED_QUESTION_COUNT = 45;
     const FORM_STORAGE_KEY = 'save_application_candidate_draft_v1';
+    const RECOVERY_STORAGE_KEY = 'save_application_failed_session_recovery_v1';
     const WRITTEN_MIN_CHARACTERS = 140;
 
     const state = {
@@ -1431,11 +1432,13 @@
       adminIncidents: [],
       detailSubmissionId: null,
       submissionInProgress: false,
+      submitConfirmArmed: false,
       allowFullscreenExit: false
     };
 
     let supabaseClient = null;
     let timerHandle = null;
+    let submitConfirmTimer = null;
 
     const el = {
       views: document.querySelectorAll('.view'),
@@ -1794,7 +1797,7 @@
       }
 
       supabaseClient.auth.onAuthStateChange(async (_event, session) => {
-        if (!session && (examIsLive() || state.submissionInProgress)) {
+        if (!session && state.submissionInProgress) {
           const refreshResult = await tryRefreshCandidateSession();
           if (refreshResult.ok) {
             renderLiveBanner('Connection session was refreshed. Your answers are still here and you can submit normally.', 'warn');
@@ -1802,10 +1805,12 @@
           }
 
           state.submissionInProgress = false;
-          el.submitAssessmentBtn.disabled = false;
-          renderLiveBanner('Connection session expired. Your answers are preserved. Click Submit to try again.', 'warn');
-          setCandidateStatus('Supabase session changed during the live exam. Answers were kept, and submission was unlocked so the candidate can retry.', 'warn');
-          beginTimer();
+          setSubmitButtonIdle();
+          renderLiveBanner('Connection session expired during submission. Your answers were kept, and you can press Submit again.', 'warn');
+          setCandidateStatus('Supabase session changed during submission. The assessment stayed recoverable and the submit button was unlocked.', 'warn');
+          if (examIsLive()) {
+            beginTimer();
+          }
           return;
         }
 
@@ -2084,6 +2089,10 @@
       el.assessmentWorkspace.classList.add('live');
       el.assessmentView.scrollIntoView({ behavior: 'smooth', block: 'start' });
       renderQuestions();
+      enableAssessmentInputs();
+      clearRecoverySnapshot();
+      disarmSubmitConfirmation();
+      setSubmitButtonIdle();
       updateExamStats();
       renderLiveBanner(
         fullscreenOk
@@ -2126,6 +2135,98 @@
       };
     }
 
+    function clearRecoverySnapshot() {
+      localStorage.removeItem(RECOVERY_STORAGE_KEY);
+    }
+
+    function saveRecoverySnapshot(reason, payload, error) {
+      try {
+        localStorage.setItem(RECOVERY_STORAGE_KEY, JSON.stringify({
+          saved_at: new Date().toISOString(),
+          reason,
+          session_id: payload?.session_id || state.sessionId || null,
+          applicant_name: payload?.applicant_name || state.applicant?.applicant_name || null,
+          payload,
+          error: error
+            ? {
+                message: error.message || String(error),
+                code: error.code || error.status || null,
+                details: error.details || error.hint || null
+              }
+            : null
+        }));
+      } catch {}
+    }
+
+    function setSubmitButtonIdle(label = 'Submit Assessment') {
+      if (state.submitted || state.terminated) return;
+      el.submitAssessmentBtn.disabled = false;
+      el.submitAssessmentBtn.textContent = label;
+    }
+
+    function setSubmitButtonBusy(label = 'Submitting Assessment...') {
+      el.submitAssessmentBtn.disabled = true;
+      el.submitAssessmentBtn.textContent = label;
+    }
+
+    function disarmSubmitConfirmation({ keepButtonText = false } = {}) {
+      state.submitConfirmArmed = false;
+      clearTimeout(submitConfirmTimer);
+      submitConfirmTimer = null;
+      if (!keepButtonText && !state.submissionInProgress && !state.submitted && !state.terminated) {
+        el.submitAssessmentBtn.textContent = 'Submit Assessment';
+      }
+    }
+
+    function armSubmitConfirmation(unanswered) {
+      state.submitConfirmArmed = true;
+      clearTimeout(submitConfirmTimer);
+      el.submitAssessmentBtn.textContent = `Confirm Submit (${unanswered} Unanswered)`;
+      renderLiveBanner(`${unanswered} question(s) are still unanswered. Click Submit again within 10 seconds to confirm.`, 'warn');
+      submitConfirmTimer = setTimeout(() => {
+        if (!state.submitConfirmArmed || state.submissionInProgress || state.submitted || state.terminated) return;
+        disarmSubmitConfirmation();
+        renderLiveBanner('Submit confirmation expired. Review the page, then click Submit again when ready.', 'warn');
+      }, 10000);
+    }
+
+    function disableAssessmentInputs() {
+      disarmSubmitConfirmation({ keepButtonText: true });
+      el.submitAssessmentBtn.disabled = true;
+      el.questionList.querySelectorAll('input[type="radio"]').forEach((node) => {
+        node.disabled = true;
+      });
+      el.questionList.querySelectorAll('textarea').forEach((node) => {
+        node.readOnly = true;
+      });
+    }
+
+    function enableAssessmentInputs() {
+      if (state.submitted || state.terminated) return;
+      el.questionList.querySelectorAll('input[type="radio"]').forEach((node) => {
+        node.disabled = false;
+      });
+      el.questionList.querySelectorAll('textarea').forEach((node) => {
+        node.readOnly = false;
+      });
+    }
+
+    function finalizeSessionUi(mode) {
+      clearInterval(timerHandle);
+      state.submissionInProgress = false;
+      disarmSubmitConfirmation({ keepButtonText: true });
+      document.body.classList.remove('exam-live');
+      el.assessmentWorkspace.classList.remove('live');
+      hideWarningOverlay();
+      disableAssessmentInputs();
+      if (mode === 'submitted') {
+        state.submitted = true;
+      } else if (mode === 'terminated') {
+        state.terminated = true;
+      }
+      updateExamStats();
+    }
+
     function looksLikeAuthError(error) {
       if (!error) return false;
 
@@ -2164,43 +2265,61 @@
       }
     }
 
-    async function persistSubmission(payload) {
-      const attemptPersist = async () => {
+    async function callSubmissionRpc(payload) {
+      try {
         const rpcResult = await supabaseClient.rpc('submit_application_assessment', { p_payload: payload });
-        if (!rpcResult.error) {
+        if (rpcResult.error) {
           return {
-            ok: true,
+            ok: false,
             via: 'rpc',
-            data: rpcResult.data || null,
-            error: null
+            data: null,
+            error: rpcResult.error
           };
         }
 
-        const fallbackRow = {
-          session_id: payload.session_id,
-          status: payload.status,
-          applicant_name: payload.applicant_name,
-          discord_tag: payload.discord_tag,
-          roblox_username: payload.roblox_username,
-          department: payload.department,
-          started_at: payload.started_at,
-          finished_at: payload.finished_at,
-          submitted_at: payload.finished_at,
-          duration_seconds: payload.duration_seconds,
-          warning_count: payload.warning_count,
-          terminated_reason: payload.terminated_reason,
-          answers: payload.answers,
-          violation_snapshot: payload.violation_snapshot,
-          browser_fingerprint: payload.browser_fingerprint,
-          score_percent: null,
-          correct_count: null,
-          total_questions: state.questions.filter((question) => !isWrittenQuestion(question)).length,
-          graded_breakdown: {}
+        return {
+          ok: true,
+          via: 'rpc',
+          data: rpcResult.data || null,
+          error: null
         };
+      } catch (error) {
+        return {
+          ok: false,
+          via: 'rpc',
+          data: null,
+          error
+        };
+      }
+    }
 
+    async function upsertSubmissionFallback(payload) {
+      const fallbackRow = {
+        session_id: payload.session_id,
+        status: payload.status,
+        applicant_name: payload.applicant_name,
+        discord_tag: payload.discord_tag,
+        roblox_username: payload.roblox_username,
+        department: payload.department,
+        started_at: payload.started_at,
+        finished_at: payload.finished_at,
+        submitted_at: payload.finished_at,
+        duration_seconds: payload.duration_seconds,
+        warning_count: payload.warning_count,
+        terminated_reason: payload.terminated_reason,
+        answers: payload.answers,
+        violation_snapshot: payload.violation_snapshot,
+        browser_fingerprint: payload.browser_fingerprint,
+        score_percent: null,
+        correct_count: null,
+        total_questions: state.questions.filter((question) => !isWrittenQuestion(question)).length,
+        graded_breakdown: {}
+      };
+
+      try {
         const fallbackResult = await supabaseClient
           .from('assessment_submissions')
-          .insert(fallbackRow)
+          .upsert(fallbackRow, { onConflict: 'session_id' })
           .select()
           .single();
 
@@ -2209,134 +2328,134 @@
             ok: false,
             via: 'fallback',
             data: null,
-            error: {
-              primary: rpcResult.error,
-              fallback: fallbackResult.error
-            }
+            error: fallbackResult.error
           };
         }
 
         return {
           ok: true,
           via: 'fallback',
-          data: fallbackResult.data,
-          error: {
-            primary: rpcResult.error
-          }
-        };
-      };
-
-      try {
-        const firstAttempt = await attemptPersist();
-        const firstError = firstAttempt.error?.primary || firstAttempt.error?.fallback || null;
-        if (firstAttempt.ok || !looksLikeAuthError(firstError)) {
-          return firstAttempt;
-        }
-
-        const refreshResult = await tryRefreshCandidateSession();
-        if (!refreshResult.ok) {
-          return {
-            ...firstAttempt,
-            error: {
-              ...(firstAttempt.error || {}),
-              refresh: refreshResult.error || { message: 'Session refresh failed.' }
-            }
-          };
-        }
-
-        const secondAttempt = await attemptPersist();
-        if (secondAttempt.ok) {
-          return {
-            ...secondAttempt,
-            refreshedSessionBeforeSubmit: true
-          };
-        }
-
-        return {
-          ...secondAttempt,
-          refreshedSessionBeforeSubmit: true,
-          error: {
-            ...(secondAttempt.error || {}),
-            refresh: null
-          }
+          data: fallbackResult.data || null,
+          error: null
         };
       } catch (error) {
-        if (!looksLikeAuthError(error)) {
-          throw error;
-        }
-
-        const refreshResult = await tryRefreshCandidateSession();
-        if (!refreshResult.ok) {
-          throw Object.assign(new Error(error?.message || 'Submission failed after session refresh attempt.'), {
-            cause: error,
-            refreshError: refreshResult.error || null
-          });
-        }
-
-        const retriedResult = await attemptPersist();
-        if (retriedResult.ok) {
-          return {
-            ...retriedResult,
-            refreshedSessionBeforeSubmit: true
-          };
-        }
-
         return {
-          ...retriedResult,
-          refreshedSessionBeforeSubmit: true
+          ok: false,
+          via: 'fallback',
+          data: null,
+          error
         };
       }
     }
 
-    async function submitAssessment({ timeout = false, confirmed = false } = {}) {
+    async function attemptSubmissionPersist(payload) {
+      const primary = await callSubmissionRpc(payload);
+      if (primary.ok) {
+        return primary;
+      }
+
+      const fallback = await upsertSubmissionFallback(payload);
+      if (fallback.ok) {
+        return {
+          ...fallback,
+          error: {
+            primary: primary.error
+          }
+        };
+      }
+
+      return {
+        ok: false,
+        via: 'fallback',
+        data: null,
+        error: {
+          primary: primary.error,
+          fallback: fallback.error
+        }
+      };
+    }
+
+    async function persistSubmission(payload) {
+      const firstAttempt = await attemptSubmissionPersist(payload);
+      const likelyAuthError = firstAttempt.error?.primary || firstAttempt.error?.fallback || firstAttempt.error || null;
+      if (firstAttempt.ok || !looksLikeAuthError(likelyAuthError)) {
+        return firstAttempt;
+      }
+
+      const refreshResult = await tryRefreshCandidateSession();
+      if (!refreshResult.ok) {
+        return {
+          ...firstAttempt,
+          error: {
+            ...(firstAttempt.error || {}),
+            refresh: refreshResult.error || { message: 'Session refresh failed.' }
+          }
+        };
+      }
+
+      const secondAttempt = await attemptSubmissionPersist(payload);
+      if (secondAttempt.ok) {
+        return {
+          ...secondAttempt,
+          refreshedSessionBeforeSubmit: true
+        };
+      }
+
+      return {
+        ...secondAttempt,
+        refreshedSessionBeforeSubmit: true,
+        error: {
+          ...(secondAttempt.error || {}),
+          refresh: null
+        }
+      };
+    }
+
+    async function submitAssessment({ timeout = false } = {}) {
       if (!examIsLive()) return;
       if (state.submissionInProgress) return;
 
       const unanswered = questionCount() - answeredCount();
-      if (!timeout && unanswered > 0 && !confirmed) {
-        renderLiveBanner(`${unanswered} question(s) unanswered. Click Submit again to confirm.`, 'warn');
-        el.submitAssessmentBtn.dataset.pendingConfirm = 'true';
+      if (!timeout && unanswered > 0 && !state.submitConfirmArmed) {
+        armSubmitConfirmation(unanswered);
         return;
       }
 
+      disarmSubmitConfirmation({ keepButtonText: true });
       state.submissionInProgress = true;
-      el.submitAssessmentBtn.disabled = true;
+      setSubmitButtonBusy(timeout ? 'Submitting Timed-Out Session...' : 'Submitting Assessment...');
       renderLiveBanner('Submitting assessment. Stay on this page and remain in fullscreen until the submission confirmation appears.', 'warn');
       clearInterval(timerHandle);
 
       const payload = buildSubmissionPayload('submitted');
-      let submissionResult;
-
-      try {
-        submissionResult = await persistSubmission(payload);
-      } catch (error) {
-        state.submissionInProgress = false;
-        el.submitAssessmentBtn.disabled = false;
-        setCandidateStatus(`Submission error: ${error?.message || 'Unknown error'}`, 'danger');
-        renderLiveBanner('Submission failed unexpectedly. You are still in the live session. Try again.', 'danger');
-        beginTimer();
-        return;
-      }
+      const submissionResult = await persistSubmission(payload);
 
       if (!submissionResult.ok) {
         state.submissionInProgress = false;
-        el.submitAssessmentBtn.disabled = false;
-        const primaryMessage = submissionResult.error?.primary?.message || 'Primary submission RPC failed.';
-        const fallbackMessage = submissionResult.error?.fallback?.message || 'Fallback insert failed.';
+        setSubmitButtonIdle();
+        const primaryMessage = submissionResult.error?.primary?.message || submissionResult.error?.message || 'Primary submission RPC failed.';
+        const fallbackMessage = submissionResult.error?.fallback?.message || 'Fallback upsert failed.';
         const refreshMessage = submissionResult.error?.refresh?.message ? ` | Refresh failed: ${submissionResult.error.refresh.message}` : '';
+
+        if (timeout) {
+          saveRecoverySnapshot('timeout_submit_failed', payload, submissionResult.error?.fallback || submissionResult.error?.primary || submissionResult.error);
+          finalizeSessionUi('terminated');
+          state.lockReason = 'Time expired, and the session was closed before Supabase accepted the submission.';
+          renderLiveBanner('Time expired. The session is closed locally, even though Supabase did not confirm the submission.', 'danger');
+          showLockOverlay('Time Expired', 'Time expired and this session is now closed. Supabase did not confirm the submission, so a recovery snapshot was saved in this browser for staff troubleshooting.');
+          setCandidateStatus(`Time expired and the session ended locally. Supabase did not accept the submission. Primary: ${primaryMessage} | Fallback: ${fallbackMessage}${refreshMessage}`, 'danger');
+          return;
+        }
+
         setCandidateStatus(`Submission failed: ${primaryMessage} | Fallback failed: ${fallbackMessage}${refreshMessage}`, 'danger');
-        renderLiveBanner('Submission failed. You are still in the live session. Fix the problem and submit again.', 'danger');
+        renderLiveBanner('Submission failed. The session is still live, and the submit button was restored so the candidate can try again.', 'danger');
         beginTimer();
         return;
       }
 
+      clearRecoverySnapshot();
       const data = submissionResult.data || {};
-      state.submitted = true;
-      state.submissionInProgress = false;
-      el.submitAssessmentBtn.disabled = false;
-      document.body.classList.remove('exam-live');
-      el.assessmentWorkspace.classList.remove('live');
-      hideWarningOverlay();
+      finalizeSessionUi('submitted');
       renderLiveBanner(
         submissionResult.via === 'fallback'
           ? 'Assessment submitted using the table fallback. Fullscreen is still active, and scoring may need admin review.'
@@ -2345,7 +2464,6 @@
             : 'Assessment submitted successfully. Fullscreen is being kept active on purpose until you leave manually.',
         'warn'
       );
-      updateExamStats();
       await pushIncident('session_submitted', 'info', {
         score_percent: data?.score_percent ?? null,
         unanswered,
@@ -2361,6 +2479,8 @@
       );
       if (submissionResult.via === 'fallback' && submissionResult.error?.primary?.message) {
         setCandidateStatus(`Submitted with fallback because the Supabase RPC failed: ${submissionResult.error.primary.message}`, 'warn');
+      } else {
+        setCandidateStatus('Assessment submitted successfully.', 'default');
       }
       if (await hasSignedInAdmin()) {
         await loadAdminData().catch(() => null);
@@ -2370,39 +2490,30 @@
     async function terminateAssessment(reason, incidentType, details = {}) {
       if (!examIsLive()) return;
 
-      clearInterval(timerHandle);
-      state.terminated = true;
       state.lockReason = reason;
-
       const incidentLogged = await pushIncident(incidentType || 'session_locked', 'critical', {
         reason,
         ...details
       });
 
       const payload = buildSubmissionPayload('terminated', { terminatedReason: reason });
-      const { error } = await supabaseClient.rpc('submit_application_assessment', { p_payload: payload });
+      const submissionResult = await persistSubmission(payload);
+      if (!submissionResult.ok) {
+        saveRecoverySnapshot('locked_session_not_persisted', payload, submissionResult.error?.fallback || submissionResult.error?.primary || submissionResult.error);
+      } else {
+        clearRecoverySnapshot();
+      }
 
-      document.body.classList.remove('exam-live');
-      el.assessmentWorkspace.classList.remove('live');
-      hideWarningOverlay();
+      finalizeSessionUi('terminated');
       renderLiveBanner('');
-      updateExamStats();
-      showLockOverlay('Session Locked', reason);
-      setCandidateStatus(incidentLogged
-        ? 'The session has been locked and logged.'
-        : 'The session has been locked. Logging may not have completed.', 'danger');
+      showLockOverlay('Session Locked', submissionResult.ok
+        ? reason
+        : `${reason} Supabase did not confirm the locked-session record, but the session has still been ended locally.`);
+      setCandidateStatus(submissionResult.ok
+        ? (incidentLogged ? 'The session has been locked and ended.' : 'The session has been locked and ended. Incident logging may not have completed.')
+        : 'The session has been locked and ended locally, but Supabase did not confirm the termination record. A recovery snapshot was saved in this browser.', 'danger');
 
-      try {
-        await document.exitFullscreen();
-      } catch {}
-
-      setTimeout(() => {
-        try {
-          window.close();
-        } catch {}
-      }, 1200);
-
-      if (!error && await hasSignedInAdmin()) {
+      if (await hasSignedInAdmin()) {
         await loadAdminData().catch(() => null);
       }
     }
@@ -2421,21 +2532,56 @@
 
       if (!supabaseClient) return false;
 
-      const rpcResult = await supabaseClient.rpc('log_application_incident', { p_payload: incident });
-      if (!rpcResult.error) return true;
+      const attemptIncidentPersist = async () => {
+        try {
+          const rpcResult = await supabaseClient.rpc('log_application_incident', { p_payload: incident });
+          if (!rpcResult.error) {
+            return { ok: true, error: null };
+          }
 
-      const fallbackResult = await supabaseClient
-        .from('assessment_incidents')
-        .insert({
-          session_id: incident.session_id,
-          applicant_name: incident.applicant_name,
-          incident_type: incident.incident_type,
-          incident_level: incident.incident_level,
-          details: incident.details,
-          created_at: incident.created_at
-        });
+          const fallbackResult = await supabaseClient
+            .from('assessment_incidents')
+            .insert({
+              session_id: incident.session_id,
+              applicant_name: incident.applicant_name,
+              incident_type: incident.incident_type,
+              incident_level: incident.incident_level,
+              details: incident.details,
+              created_at: incident.created_at
+            });
 
-      return !fallbackResult.error;
+          if (!fallbackResult.error) {
+            return { ok: true, error: rpcResult.error };
+          }
+
+          return {
+            ok: false,
+            error: {
+              primary: rpcResult.error,
+              fallback: fallbackResult.error
+            }
+          };
+        } catch (error) {
+          return {
+            ok: false,
+            error
+          };
+        }
+      };
+
+      const firstAttempt = await attemptIncidentPersist();
+      const likelyAuthError = firstAttempt.error?.primary || firstAttempt.error?.fallback || firstAttempt.error || null;
+      if (firstAttempt.ok || !looksLikeAuthError(likelyAuthError)) {
+        return firstAttempt.ok;
+      }
+
+      const refreshResult = await tryRefreshCandidateSession();
+      if (!refreshResult.ok) {
+        return false;
+      }
+
+      const secondAttempt = await attemptIncidentPersist();
+      return secondAttempt.ok;
     }
 
     function showWarningOverlay(source) {
@@ -2527,6 +2673,10 @@
       const questionId = input.name.replace('question-', '');
       state.answers[questionId] = input.value.toUpperCase();
       syncSelectedOptions(questionId);
+      if (state.submitConfirmArmed) {
+        disarmSubmitConfirmation();
+        renderLiveBanner('Answer changed. Review the page, then click Submit again when ready.', 'warn');
+      }
       updateExamStats();
     }
 
@@ -2539,6 +2689,10 @@
 
       state.answers[questionId] = input.value;
       updateWrittenCounter(questionId, input.value);
+      if (state.submitConfirmArmed) {
+        disarmSubmitConfirmation();
+        renderLiveBanner('Answer changed. Review the page, then click Submit again when ready.', 'warn');
+      }
       updateExamStats();
     }
 
@@ -2824,9 +2978,7 @@
       el.reloadFullscreenBtn.addEventListener('click', requestExamFullscreen);
       el.clearDraftBtn.addEventListener('click', clearFormDraft);
       el.submitAssessmentBtn.addEventListener('click', async () => {
-        const pending = el.submitAssessmentBtn.dataset.pendingConfirm === 'true';
-        el.submitAssessmentBtn.dataset.pendingConfirm = '';
-        await submitAssessment({ timeout: false, confirmed: pending });
+        await submitAssessment({ timeout: false });
       });
       el.returnToSessionBtn.addEventListener('click', async () => {
         await requestExamFullscreen();
