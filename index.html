@@ -2110,13 +2110,7 @@
     }
 
     async function submitAssessment({ timeout = false } = {}) {
-      // Block Ctrl+S / Cmd+S at all times — not just during the exam
-        if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 's') {
-          event.preventDefault();
-          return;
-        }
-
-        if (!examIsLive()) return;
+      if (!examIsLive()) return;
 
       const unanswered = questionCount() - answeredCount();
       if (!timeout && unanswered > 0) {
@@ -2137,6 +2131,7 @@
 
       state.submitted = true;
       document.body.classList.remove('exam-live');
+      el.assessmentWorkspace.classList.remove('live');
       hideWarningOverlay();
       renderLiveBanner('');
       updateExamStats();
@@ -2174,6 +2169,7 @@
       const { error } = await supabaseClient.rpc('submit_application_assessment', { p_payload: payload });
 
       document.body.classList.remove('exam-live');
+      el.assessmentWorkspace.classList.remove('live');
       hideWarningOverlay();
       renderLiveBanner('');
       updateExamStats();
@@ -2757,11 +2753,6 @@
     }
 
     bootstrap();
-    document.addEventListener('keydown', (event) => {
-  if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 's') {
-    event.preventDefault();
-  }
-});
   </script>
 </body>
 </html>
