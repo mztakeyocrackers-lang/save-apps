@@ -2189,7 +2189,18 @@
       clearInterval(timerHandle);
 
       const payload = buildSubmissionPayload('submitted');
-      const submissionResult = await persistSubmission(payload);
+      let submissionResult;
+
+      try {
+        submissionResult = await persistSubmission(payload);
+      } catch (error) {
+        state.submissionInProgress = false;
+        el.submitAssessmentBtn.disabled = false;
+        setCandidateStatus(`Submission error: ${error?.message || 'Unknown error'}`, 'danger');
+        renderLiveBanner('Submission failed unexpectedly. You are still in the live session. Try again.', 'danger');
+        beginTimer();
+        return;
+      }
 
       if (!submissionResult.ok) {
         state.submissionInProgress = false;
@@ -2693,11 +2704,11 @@
       el.startAssessmentBtn.addEventListener('click', startAssessment);
       el.reloadFullscreenBtn.addEventListener('click', requestExamFullscreen);
       el.clearDraftBtn.addEventListener('click', clearFormDraft);
-      el.submitAssessmentBtn.addEventListener('click', () => {
-  const pending = el.submitAssessmentBtn.dataset.pendingConfirm === 'true';
-  el.submitAssessmentBtn.dataset.pendingConfirm = '';
-  submitAssessment({ timeout: false, confirmed: pending });
-});
+      el.submitAssessmentBtn.addEventListener('click', async () => {
+        const pending = el.submitAssessmentBtn.dataset.pendingConfirm === 'true';
+        el.submitAssessmentBtn.dataset.pendingConfirm = '';
+        await submitAssessment({ timeout: false, confirmed: pending });
+      });
       el.returnToSessionBtn.addEventListener('click', async () => {
         await requestExamFullscreen();
         hideWarningOverlay();
