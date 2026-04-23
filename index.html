@@ -2109,14 +2109,15 @@
       };
     }
 
-    async function submitAssessment({ timeout = false } = {}) {
-      if (!examIsLive()) return;
+    async function submitAssessment({ timeout = false, confirmed = false } = {}) {
+  if (!examIsLive()) return;
 
-      const unanswered = questionCount() - answeredCount();
-      if (!timeout && unanswered > 0) {
-        const proceed = window.confirm(`There are ${unanswered} unanswered questions. Submit anyway? Unanswered questions will be marked wrong.`);
-        if (!proceed) return;
-      }
+  const unanswered = questionCount() - answeredCount();
+  if (!timeout && unanswered > 0 && !confirmed) {
+    renderLiveBanner(`${unanswered} question(s) unanswered. Click Submit again to confirm.`, 'warn');
+    el.submitAssessmentBtn.dataset.pendingConfirm = 'true';
+    return;
+  }
 
       clearInterval(timerHandle);
 
@@ -2584,7 +2585,11 @@
       el.startAssessmentBtn.addEventListener('click', startAssessment);
       el.reloadFullscreenBtn.addEventListener('click', requestExamFullscreen);
       el.clearDraftBtn.addEventListener('click', clearFormDraft);
-      el.submitAssessmentBtn.addEventListener('click', () => submitAssessment({ timeout: false }));
+      el.submitAssessmentBtn.addEventListener('click', () => {
+  const pending = el.submitAssessmentBtn.dataset.pendingConfirm === 'true';
+  el.submitAssessmentBtn.dataset.pendingConfirm = '';
+  submitAssessment({ timeout: false, confirmed: pending });
+});
       el.returnToSessionBtn.addEventListener('click', async () => {
         await requestExamFullscreen();
         hideWarningOverlay();
