@@ -2111,6 +2111,67 @@
       };
     }
 
+    async function persistSubmission(payload) {
+      const rpcResult = await supabaseClient.rpc('submit_application_assessment', { p_payload: payload });
+      if (!rpcResult.error) {
+        return {
+          ok: true,
+          via: 'rpc',
+          data: rpcResult.data || null,
+          error: null
+        };
+      }
+
+      const fallbackRow = {
+        session_id: payload.session_id,
+        status: payload.status,
+        applicant_name: payload.applicant_name,
+        discord_tag: payload.discord_tag,
+        roblox_username: payload.roblox_username,
+        department: payload.department,
+        started_at: payload.started_at,
+        finished_at: payload.finished_at,
+        submitted_at: payload.finished_at,
+        duration_seconds: payload.duration_seconds,
+        warning_count: payload.warning_count,
+        terminated_reason: payload.terminated_reason,
+        answers: payload.answers,
+        violation_snapshot: payload.violation_snapshot,
+        browser_fingerprint: payload.browser_fingerprint,
+        score_percent: null,
+        correct_count: null,
+        total_questions: state.questions.filter((question) => !isWrittenQuestion(question)).length,
+        graded_breakdown: {}
+      };
+
+      const fallbackResult = await supabaseClient
+        .from('assessment_submissions')
+        .insert(fallbackRow)
+        .select()
+        .single();
+
+      if (fallbackResult.error) {
+        return {
+          ok: false,
+          via: 'fallback',
+          data: null,
+          error: {
+            primary: rpcResult.error,
+            fallback: fallbackResult.error
+          }
+        };
+      }
+
+      return {
+        ok: true,
+        via: 'fallback',
+        data: fallbackResult.data,
+        error: {
+          primary: rpcResult.error
+        }
+      };
+    }
+
     async function submitAssessment({ timeout = false, confirmed = false } = {}) {
       if (!examIsLive()) return;
       if (state.submissionInProgress) return;
@@ -2128,35 +2189,49 @@
       clearInterval(timerHandle);
 
       const payload = buildSubmissionPayload('submitted');
-      const { data, error } = await supabaseClient.rpc('submit_application_assessment', { p_payload: payload });
+      const submissionResult = await persistSubmission(payload);
 
-      if (error) {
+      if (!submissionResult.ok) {
         state.submissionInProgress = false;
         el.submitAssessmentBtn.disabled = false;
-        setCandidateStatus(`Submission failed: ${error.message}`, 'danger');
+        const primaryMessage = submissionResult.error?.primary?.message || 'Primary submission RPC failed.';
+        const fallbackMessage = submissionResult.error?.fallback?.message || 'Fallback insert failed.';
+        setCandidateStatus(`Submission failed: ${primaryMessage} | Fallback failed: ${fallbackMessage}`, 'danger');
         renderLiveBanner('Submission failed. You are still in the live session. Fix the problem and submit again.', 'danger');
         beginTimer();
         return;
       }
 
+      const data = submissionResult.data || {};
       state.submitted = true;
       state.submissionInProgress = false;
       el.submitAssessmentBtn.disabled = false;
       document.body.classList.remove('exam-live');
       el.assessmentWorkspace.classList.remove('live');
       hideWarningOverlay();
-      renderLiveBanner('Assessment submitted successfully. Fullscreen is being kept active on purpose until you leave manually.', 'warn');
+      renderLiveBanner(
+        submissionResult.via === 'fallback'
+          ? 'Assessment submitted using the table fallback. Fullscreen is still active, and scoring may need admin review.'
+          : 'Assessment submitted successfully. Fullscreen is being kept active on purpose until you leave manually.',
+        'warn'
+      );
       updateExamStats();
       await pushIncident('session_submitted', 'info', {
         score_percent: data?.score_percent ?? null,
-        unanswered
+        unanswered,
+        submission_path: submissionResult.via
       });
       showLockOverlay(
         timeout ? 'Time Expired And Submitted' : 'Assessment Submitted',
         data?.score_percent !== null && data?.score_percent !== undefined
           ? `This assessment has been submitted. Score: ${formatPercent(data.score_percent)}. Correct answers: ${data.correct_count ?? '0'} of ${data.total_questions ?? questionCount()}. Fullscreen has been left on intentionally so no exit warning is triggered during submission.`
-          : 'This assessment has been submitted successfully. Fullscreen has been left on intentionally so no exit warning is triggered during submission.'
+          : submissionResult.via === 'fallback'
+            ? 'This assessment has been submitted through the direct table fallback. Fullscreen has been left on intentionally. Automatic scoring may be unavailable until the Supabase RPC is fixed.'
+            : 'This assessment has been submitted successfully. Fullscreen has been left on intentionally so no exit warning is triggered during submission.'
       );
+      if (submissionResult.via === 'fallback' && submissionResult.error?.primary?.message) {
+        setCandidateStatus(`Submitted with fallback because the Supabase RPC failed: ${submissionResult.error.primary.message}`, 'warn');
+      }
       if (await hasSignedInAdmin()) {
         await loadAdminData().catch(() => null);
       }
@@ -2216,8 +2291,21 @@
 
       if (!supabaseClient) return false;
 
-      const { error } = await supabaseClient.rpc('log_application_incident', { p_payload: incident });
-      return !error;
+      const rpcResult = await supabaseClient.rpc('log_application_incident', { p_payload: incident });
+      if (!rpcResult.error) return true;
+
+      const fallbackResult = await supabaseClient
+        .from('assessment_incidents')
+        .insert({
+          session_id: incident.session_id,
+          applicant_name: incident.applicant_name,
+          incident_type: incident.incident_type,
+          incident_level: incident.incident_level,
+          details: incident.details,
+          created_at: incident.created_at
+        });
+
+      return !fallbackResult.error;
     }
 
     function showWarningOverlay(source) {
