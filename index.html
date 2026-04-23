@@ -590,6 +590,28 @@
       font-size: 15px;
     }
 
+    .question-mode {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px;
+      border-radius: 999px;
+      border: 1px solid rgba(131, 185, 255, 0.14);
+      background: rgba(131, 185, 255, 0.08);
+      color: var(--muted);
+      font-size: 11px;
+      font-family: "IBM Plex Mono", monospace;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      flex: 0 0 auto;
+    }
+
+    .question-mode.written {
+      border-color: rgba(241, 200, 120, 0.18);
+      background: rgba(241, 200, 120, 0.1);
+      color: #ffe8bb;
+    }
+
     .option-grid {
       display: grid;
       gap: 12px;
@@ -649,6 +671,42 @@
     .option.selected .option-key {
       background: linear-gradient(135deg, var(--gold), #ffe4a9);
       color: #07111f;
+    }
+
+    .written-shell {
+      display: grid;
+      gap: 12px;
+    }
+
+    .written-note {
+      padding: 14px 16px;
+      border-radius: 16px;
+      border: 1px solid rgba(241, 200, 120, 0.16);
+      background: rgba(241, 200, 120, 0.08);
+      color: #ffe9bf;
+      font-size: 13px;
+      line-height: 1.8;
+    }
+
+    .written-response {
+      min-height: 180px;
+      resize: vertical;
+      line-height: 1.8;
+    }
+
+    .written-count {
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.7;
+      text-align: right;
+    }
+
+    .written-count.good {
+      color: #b6ffd0;
+    }
+
+    .written-count.warn {
+      color: #ffe9bf;
     }
 
     .admin-grid {
@@ -765,15 +823,6 @@
       background: rgba(103, 211, 255, 0.14);
     }
 
-    .detail-panel {
-      display: none;
-      margin-top: 20px;
-    }
-
-    .detail-panel.show {
-      display: block;
-    }
-
     .detail-grid {
       display: grid;
       grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -794,12 +843,39 @@
       line-height: 1.6;
     }
 
+    .detail-value.good {
+      color: #b6ffd0;
+    }
+
+    .detail-value.warn {
+      color: #ffe9bf;
+    }
+
+    .detail-value.danger {
+      color: #ffdce2;
+    }
+
     .answer-review {
       display: grid;
       gap: 12px;
       max-height: 440px;
       overflow: auto;
       padding-right: 6px;
+    }
+
+    .detail-section {
+      margin-top: 22px;
+    }
+
+    .detail-section:first-of-type {
+      margin-top: 0;
+    }
+
+    .detail-section-copy {
+      margin: 10px 0 16px;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.8;
     }
 
     .answer-card {
@@ -841,6 +917,10 @@
       display: flex;
       flex-direction: column;
       justify-content: center;
+    }
+
+    body.detail-modal-open {
+      overflow: hidden;
     }
 
     .overlay {
@@ -886,6 +966,49 @@
 
     .overlay-card.locked {
       border-color: rgba(255, 113, 136, 0.32);
+    }
+
+    .overlay-card.detail-modal {
+      width: min(1080px, 100%);
+      max-height: min(86vh, 920px);
+      overflow: hidden;
+      border-color: rgba(103, 211, 255, 0.24);
+      padding: 0;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .detail-modal-head {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 28px 30px 18px;
+      border-bottom: 1px solid rgba(131, 185, 255, 0.12);
+    }
+
+    .detail-modal-body {
+      padding: 24px 30px 30px;
+      overflow: auto;
+    }
+
+    .modal-close {
+      width: 46px;
+      height: 46px;
+      border: 1px solid rgba(131, 185, 255, 0.16);
+      border-radius: 14px;
+      background: rgba(255, 255, 255, 0.04);
+      color: var(--text);
+      font-size: 24px;
+      line-height: 1;
+      cursor: pointer;
+      flex: 0 0 auto;
+    }
+
+    .modal-close:hover,
+    .modal-close:focus-visible {
+      background: rgba(103, 211, 255, 0.12);
+      outline: none;
     }
 
     .empty-state {
@@ -999,7 +1122,7 @@
           <div class="panel-body">
             <div class="panel-kicker">Candidate Session</div>
             <h2 class="hero-headline">Locked-in testing with a real incident trail.</h2>
-            <p class="hero-copy">This build is designed around a 45-question application made up of 30 core policy questions and 15 judgment scenarios. Question content loads from Supabase, grading happens server-side, and the browser side only receives the public question bank.</p>
+            <p class="hero-copy">This build is designed around a 45-question application made up of 30 auto-scored policy questions and 15 typed written responses. Question content loads from Supabase, the objective section is scored server-side, and the written section is preserved for manual supervisor review.</p>
             <div class="badge-row">
               <span class="pill">45 Questions</span>
               <span class="pill">Fullscreen Required</span>
@@ -1017,7 +1140,7 @@
               </div>
               <div class="rail-card">
                 <strong>Admin Review</strong>
-                <span>Supervisors can sign in through Supabase Auth to review submissions, scores, incidents, and answer patterns from one panel.</span>
+                <span>Supervisors can sign in through Supabase Auth to review scores, incidents, typed written responses, and the full submission record from one panel.</span>
               </div>
             </div>
             <p class="muted-note">Normal browsers cannot be made perfectly impossible to leave. This page uses the strongest practical browser-side controls available and then locks and logs when users break them.</p>
@@ -1220,19 +1343,6 @@
         </div>
       </article>
 
-      <article class="panel detail-panel admin-secure-content" id="submission-detail-panel">
-        <div class="panel-body">
-          <div class="table-head">
-            <div>
-              <div class="panel-kicker">Submission Detail</div>
-              <h3 id="detail-title">No submission selected.</h3>
-              <p id="detail-copy">Select a submission from the table above to inspect the answer sheet and integrity summary.</p>
-            </div>
-          </div>
-          <div class="detail-grid" id="detail-summary-grid"></div>
-          <div class="answer-review" id="detail-answer-review"></div>
-        </div>
-      </article>
     </section>
   </main>
 
@@ -1258,6 +1368,32 @@
     </div>
   </section>
 
+  <section class="overlay" id="submission-detail-overlay" aria-hidden="true">
+    <div class="overlay-card detail-modal" role="dialog" aria-modal="true" aria-labelledby="detail-title">
+      <div class="detail-modal-head">
+        <div>
+          <div class="panel-kicker">Submission Detail</div>
+          <h2 id="detail-title">No submission selected.</h2>
+          <p id="detail-copy">Select a submission from the table above to inspect the answer sheet and integrity summary.</p>
+        </div>
+        <button class="modal-close" id="detail-close-btn" type="button" aria-label="Close submission review">×</button>
+      </div>
+      <div class="detail-modal-body">
+        <div class="detail-grid" id="detail-summary-grid"></div>
+        <section class="detail-section" aria-labelledby="detail-incidents-label">
+          <div class="panel-kicker" id="detail-incidents-label">Integrity Log</div>
+          <p class="detail-section-copy">Clipboard hits, focus loss, fullscreen exits, and any other flagged signals tied to this exact submission appear here.</p>
+          <div class="answer-review" id="detail-incident-review"></div>
+        </section>
+        <section class="detail-section" aria-labelledby="detail-answers-label">
+          <div class="panel-kicker" id="detail-answers-label">Answer Review</div>
+          <p class="detail-section-copy">Each answer is compared against the hashed key server-side, then mirrored here for supervisor review.</p>
+          <div class="answer-review" id="detail-answer-review"></div>
+        </section>
+      </div>
+    </div>
+  </section>
+
   <script>
     const APP_CONFIG = {
       supabaseUrl: 'https://xnqjdgixcocekzehsote.supabase.co',
@@ -1268,6 +1404,7 @@
     const MAX_FOCUS_WARNINGS = 1;
     const EXPECTED_QUESTION_COUNT = 45;
     const FORM_STORAGE_KEY = 'save_application_candidate_draft_v1';
+    const WRITTEN_MIN_CHARACTERS = 140;
 
     const state = {
       questions: [],
@@ -1335,10 +1472,12 @@
       summaryClipboard: document.getElementById('summary-clipboard'),
       submissionTableBody: document.getElementById('submission-table-body'),
       incidentTableBody: document.getElementById('incident-table-body'),
-      detailPanel: document.getElementById('submission-detail-panel'),
+      detailOverlay: document.getElementById('submission-detail-overlay'),
+      detailCloseBtn: document.getElementById('detail-close-btn'),
       detailTitle: document.getElementById('detail-title'),
       detailCopy: document.getElementById('detail-copy'),
       detailSummaryGrid: document.getElementById('detail-summary-grid'),
+      detailIncidentReview: document.getElementById('detail-incident-review'),
       detailAnswerReview: document.getElementById('detail-answer-review')
     };
 
@@ -1365,6 +1504,10 @@
         .replace(/>/g, '&gt;')
         .replace(/"/g, '&quot;')
         .replace(/'/g, '&#39;');
+    }
+
+    function escapeMultiline(value) {
+      return escapeHtml(value).replace(/\n/g, '<br>');
     }
 
     function safeJson(value, fallback) {
@@ -1471,11 +1614,25 @@
       return state.questions.length;
     }
 
+    function isWrittenQuestion(question) {
+      return question.options.every((option) => !String(option.text || '').trim());
+    }
+
+    function normalizedAnswer(questionId) {
+      const value = state.answers[questionId];
+      return typeof value === 'string' ? value.trim() : '';
+    }
+
+    function hasAnsweredQuestion(question) {
+      if (isWrittenQuestion(question)) {
+        return normalizedAnswer(question.id).length >= WRITTEN_MIN_CHARACTERS;
+      }
+
+      return /^[A-D]$/.test(normalizedAnswer(question.id).toUpperCase());
+    }
+
     function answeredCount() {
-      return Object.keys(state.answers).filter((key) => {
-        const answer = state.answers[key];
-        return typeof answer === 'string' && answer.length === 1;
-      }).length;
+      return state.questions.filter((question) => hasAnsweredQuestion(question)).length;
     }
 
     function humanizeIncident(type) {
@@ -1526,6 +1683,52 @@
       const numeric = Number(value);
       if (!Number.isFinite(numeric)) return String(value);
       return `${Math.round(numeric * 100) / 100}%`;
+    }
+
+    function buildFixedTag(label, tone = 'warn') {
+      return `<span class="tag ${escapeHtml(tone)}">${escapeHtml(label)}</span>`;
+    }
+
+    function getAutoVerdict(submission) {
+      if (submission.status !== 'submitted') {
+        return {
+          label: 'Integrity hold',
+          tone: 'danger',
+          detail: submission.terminated_reason || 'This session did not finish cleanly enough for auto scoring.'
+        };
+      }
+
+      const score = Number(submission.score_percent);
+      const warnings = Number(submission.warning_count ?? 0);
+      if (!Number.isFinite(score)) {
+        return {
+          label: 'Pending review',
+          tone: 'warn',
+          detail: 'A score has not been returned from the server-side grader yet.'
+        };
+      }
+
+      if (score >= 80 && warnings === 0) {
+        return {
+          label: 'Recommended pass',
+          tone: 'good',
+          detail: 'Meets the 80% auto-score cutoff on the 30-question auto-scored section with no recorded focus warnings.'
+        };
+      }
+
+      if (score >= 80) {
+        return {
+          label: 'Pass with review',
+          tone: 'warn',
+          detail: `Meets the 80% auto-score cutoff on the 30-question auto-scored section, but ${warnings} warning${warnings === 1 ? '' : 's'} should be checked.`
+        };
+      }
+
+      return {
+        label: 'Below cutoff',
+        tone: 'danger',
+        detail: 'Did not reach the 80% auto-score cutoff.'
+      };
     }
 
     function buildTag(status) {
@@ -1657,6 +1860,27 @@
           html.push(`<div class="question-section eyebrow">${escapeHtml(currentSection)}</div>`);
         }
 
+        if (isWrittenQuestion(question)) {
+          const response = normalizedAnswer(question.id);
+          const enoughText = response.length >= WRITTEN_MIN_CHARACTERS;
+
+          html.push(`
+            <article class="question-card">
+              <div class="question-head">
+                <div class="question-number">${index + 1}</div>
+                <p class="question-text">${escapeHtml(question.prompt)}</p>
+                <div class="question-mode written">Written</div>
+              </div>
+              <div class="written-shell">
+                <div class="written-note">Type this in your own words. Be specific, mention real habits or examples when possible, and avoid generic one-line answers. Minimum ${WRITTEN_MIN_CHARACTERS} characters. Copy and paste is blocked during the live session.</div>
+                <textarea class="written-response" data-question-id="${escapeHtml(question.id)}" rows="7" maxlength="2200" placeholder="Write your answer manually here..." spellcheck="false">${escapeHtml(response)}</textarea>
+                <div class="written-count ${enoughText ? 'good' : 'warn'}" data-written-count-for="${escapeHtml(question.id)}">${response.length} / ${WRITTEN_MIN_CHARACTERS} minimum characters</div>
+              </div>
+            </article>
+          `);
+          return;
+        }
+
         const options = question.options.map((option) => {
           const selected = state.answers[question.id] === option.key;
           return `
@@ -1673,6 +1897,7 @@
             <div class="question-head">
               <div class="question-number">${index + 1}</div>
               <p class="question-text">${escapeHtml(question.prompt)}</p>
+              <div class="question-mode">Choice</div>
             </div>
             <div class="option-grid">${options}</div>
           </article>
@@ -1688,6 +1913,16 @@
         if (!label) return;
         label.classList.toggle('selected', input.checked);
       });
+    }
+
+    function updateWrittenCounter(questionId, rawValue) {
+      const counter = el.questionList.querySelector(`[data-written-count-for="${questionId}"]`);
+      if (!(counter instanceof HTMLElement)) return;
+
+      const response = String(rawValue ?? '').trim();
+      counter.textContent = `${response.length} / ${WRITTEN_MIN_CHARACTERS} minimum characters`;
+      counter.classList.toggle('good', response.length >= WRITTEN_MIN_CHARACTERS);
+      counter.classList.toggle('warn', response.length < WRITTEN_MIN_CHARACTERS);
     }
 
     function updateExamStats() {
@@ -1828,7 +2063,7 @@
       updateExamStats();
       renderLiveBanner(
         fullscreenOk
-          ? 'Live session active. Copy, cut, or paste will immediately lock this assessment.'
+          ? 'Live session active. Copy, cut, or paste will immediately lock this assessment, and the written prompts must be typed manually.'
           : 'Live session active without fullscreen. Focus loss, tab switching, and paste attempts are still monitored.'
       );
       setCandidateStatus(
@@ -2042,8 +2277,20 @@
       if (!input.name.startsWith('question-') || input.type !== 'radio') return;
 
       const questionId = input.name.replace('question-', '');
-      state.answers[questionId] = input.value;
+      state.answers[questionId] = input.value.toUpperCase();
       syncSelectedOptions(questionId);
+      updateExamStats();
+    }
+
+    function handleQuestionInput(event) {
+      const input = event.target;
+      if (!(input instanceof HTMLTextAreaElement)) return;
+
+      const questionId = input.dataset.questionId;
+      if (!questionId) return;
+
+      state.answers[questionId] = input.value;
+      updateWrittenCounter(questionId, input.value);
       updateExamStats();
     }
 
@@ -2158,11 +2405,17 @@
             <span class="mono">${escapeHtml(submission.roblox_username || 'No Roblox')}</span>
           </td>
           <td>${buildTag(submission.status)}</td>
-          <td>${submission.status === 'submitted' ? escapeHtml(formatPercent(submission.score_percent)) : '<span class="mono">Locked</span>'}</td>
+          <td>${(() => {
+            const verdict = getAutoVerdict(submission);
+            const scoreMarkup = submission.status === 'submitted'
+              ? escapeHtml(formatPercent(submission.score_percent))
+              : '<span class="mono">Locked</span>';
+            return `${scoreMarkup}<div class="muted-note">${buildFixedTag(verdict.label, verdict.tone)}</div>`;
+          })()}</td>
           <td>${escapeHtml(String(submission.warning_count ?? 0))}</td>
           <td>${escapeHtml(submission.department || 'Unknown')}</td>
           <td>${escapeHtml(formatDateTime(submission.submitted_at || submission.finished_at))}</td>
-          <td><button class="table-btn" type="button" data-review-id="${escapeHtml(submission.session_id)}">View</button></td>
+          <td><button class="table-btn" type="button" data-review-id="${escapeHtml(submission.session_id)}">View Application</button></td>
         </tr>
       `).join('');
     }
@@ -2188,42 +2441,100 @@
     function renderSubmissionDetail() {
       const submission = state.adminSubmissions.find((item) => item.session_id === state.detailSubmissionId);
       if (!submission) {
-        el.detailPanel.classList.remove('show');
+        el.detailOverlay.classList.remove('show');
+        el.detailOverlay.setAttribute('aria-hidden', 'true');
+        document.body.classList.remove('detail-modal-open');
         el.detailTitle.textContent = 'No submission selected.';
         el.detailCopy.textContent = 'Select a submission from the table above to inspect the answer sheet and integrity summary.';
         el.detailSummaryGrid.innerHTML = '';
+        el.detailIncidentReview.innerHTML = '';
         el.detailAnswerReview.innerHTML = '';
         return;
       }
 
       const answered = submission.answers || {};
       const breakdown = submission.graded_breakdown || {};
+      const verdict = getAutoVerdict(submission);
+      const relatedIncidents = state.adminIncidents.filter((item) => item.session_id === submission.session_id);
 
-      el.detailPanel.classList.add('show');
+      el.detailOverlay.classList.add('show');
+      el.detailOverlay.setAttribute('aria-hidden', 'false');
+      document.body.classList.add('detail-modal-open');
       el.detailTitle.textContent = `${submission.applicant_name || 'Unknown'} - ${String(submission.status || 'unknown').replace(/_/g, ' ')}`;
       el.detailCopy.textContent = submission.terminated_reason
         ? `Terminated reason: ${submission.terminated_reason}`
-        : 'Review the answer sheet below. Correctness is based on the server-side grading result stored in this submission.';
+        : `Auto verdict: ${verdict.label}. The 30 multiple-choice questions are server-scored, and the 15 written responses remain in this review for manual judgment.`;
 
       const cards = [
-        ['Score', submission.status === 'submitted' ? formatPercent(submission.score_percent) : 'Locked'],
-        ['Correct', submission.status === 'submitted' ? `${submission.correct_count ?? 0} / ${submission.total_questions ?? questionCount()}` : 'Not graded'],
-        ['Warnings', String(submission.warning_count ?? 0)],
-        ['Finished', formatDateTime(submission.submitted_at || submission.finished_at)],
-        ['Discord', submission.discord_tag || 'Unknown'],
-        ['Roblox', submission.roblox_username || 'Unknown'],
-        ['Department', submission.department || 'Unknown'],
-        ['Session', submission.session_id || 'Unknown']
+        {
+          label: 'Auto Score',
+          value: submission.status === 'submitted' ? formatPercent(submission.score_percent) : 'Locked',
+          tone: verdict.tone
+        },
+        {
+          label: 'Auto Verdict',
+          value: verdict.label,
+          tone: verdict.tone
+        },
+        {
+          label: 'Correct',
+          value: submission.status === 'submitted' ? `${submission.correct_count ?? 0} / ${submission.total_questions ?? 30}` : 'Not graded'
+        },
+        {
+          label: 'Warnings',
+          value: String(submission.warning_count ?? 0),
+          tone: Number(submission.warning_count ?? 0) > 0 ? 'warn' : 'good'
+        },
+        { label: 'Finished', value: formatDateTime(submission.submitted_at || submission.finished_at) },
+        { label: 'Discord', value: submission.discord_tag || 'Unknown' },
+        { label: 'Roblox', value: submission.roblox_username || 'Unknown' },
+        { label: 'Department', value: submission.department || 'Unknown' },
+        { label: 'Session', value: submission.session_id || 'Unknown' },
+        { label: 'Scorer Note', value: verdict.detail, tone: verdict.tone }
       ];
 
-      el.detailSummaryGrid.innerHTML = cards.map(([label, value]) => `
+      el.detailSummaryGrid.innerHTML = cards.map((card) => `
         <div class="detail-card">
-          <div class="detail-label">${escapeHtml(label)}</div>
-          <div class="detail-value ${label === 'Score' && submission.status === 'submitted' ? 'good' : ''}">${escapeHtml(value)}</div>
+          <div class="detail-label">${escapeHtml(card.label)}</div>
+          <div class="detail-value${card.tone ? ` ${escapeHtml(card.tone)}` : ''}">${escapeHtml(card.value)}</div>
         </div>
       `).join('');
 
+      el.detailIncidentReview.innerHTML = relatedIncidents.length
+        ? relatedIncidents.map((incident) => `
+          <article class="answer-card">
+            <h4>${escapeHtml(formatDateTime(incident.created_at))}</h4>
+            <p><strong>Incident:</strong> ${escapeHtml(humanizeIncident(incident.incident_type || 'incident'))}</p>
+            <p><strong>Severity:</strong> ${escapeHtml(String(incident.incident_level || 'info').replace(/_/g, ' '))}</p>
+            <p><strong>Details:</strong> <span class="mono">${escapeHtml(JSON.stringify(incident.details || {}))}</span></p>
+          </article>
+        `).join('')
+        : `
+          <article class="answer-card">
+            <h4>No integrity incidents recorded.</h4>
+            <p>This submission does not have any focus, clipboard, or navigation violations attached to its session.</p>
+          </article>
+        `;
+
       el.detailAnswerReview.innerHTML = state.questions.map((question, index) => {
+        if (isWrittenQuestion(question)) {
+          const response = typeof answered[question.id] === 'string' ? answered[question.id].trim() : '';
+          const enoughText = response.length >= WRITTEN_MIN_CHARACTERS;
+          const statusTag = response
+            ? `${enoughText ? '<span class="tag good">Length met</span>' : '<span class="tag warn">Short response</span>'}<span class="tag warn">Manual review</span>`
+            : '<span class="tag danger">No written response</span>';
+
+          return `
+            <article class="answer-card">
+              <h4>${index + 1}. ${escapeHtml(question.prompt)}</h4>
+              <p><strong>Written response:</strong></p>
+              <p>${response ? escapeMultiline(response) : 'No response recorded.'}</p>
+              <div class="status-row">${statusTag}</div>
+              <div class="muted-note">${response.length} characters captured.</div>
+            </article>
+          `;
+        }
+
         const chosen = answered[question.id] || '';
         const option = question.options.find((item) => item.key === chosen);
         const correctness = breakdown[question.id];
@@ -2271,10 +2582,20 @@
       });
       el.lockCloseBtn.addEventListener('click', hideLockOverlay);
       el.questionList.addEventListener('change', handleQuestionChange);
+      el.questionList.addEventListener('input', handleQuestionInput);
 
       el.adminSigninBtn.addEventListener('click', signInAdmin);
       el.adminSignoutBtn.addEventListener('click', signOutAdmin);
       el.adminRefreshBtn.addEventListener('click', loadAdminData);
+      el.detailCloseBtn.addEventListener('click', () => {
+        state.detailSubmissionId = null;
+        renderSubmissionDetail();
+      });
+      el.detailOverlay.addEventListener('click', (event) => {
+        if (event.target !== el.detailOverlay) return;
+        state.detailSubmissionId = null;
+        renderSubmissionDetail();
+      });
 
       el.submissionTableBody.addEventListener('click', (event) => {
         const target = event.target;
@@ -2359,6 +2680,13 @@
       });
 
       document.addEventListener('keydown', (event) => {
+        if (!examIsLive() && event.key === 'Escape' && el.detailOverlay.classList.contains('show')) {
+          event.preventDefault();
+          state.detailSubmissionId = null;
+          renderSubmissionDetail();
+          return;
+        }
+
         if (!examIsLive()) return;
 
         const key = event.key.toLowerCase();
